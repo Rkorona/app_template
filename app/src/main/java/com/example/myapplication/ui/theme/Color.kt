@@ -2,47 +2,22 @@ package com.example.myapplication.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// ==================== 🎮 方案一：赛博数字 / 极客未来感 ====================
-val CyberLightPrimary = Color(0xFF4F46E5)
-val CyberLightSecondary = Color(0xFF0D9488)
-val CyberLightTertiary = Color(0xFFDB2777)
-val CyberLightBackground = Color(0xFFFFFFFF)
-val CyberLightSurfaceContainer = Color(0xFFF1F5F9)
-val CyberLightOnSurface = Color(0xFF0F172A)
+// ==================== ☀️ Termius 经典浅色系 ====================
+val TermiusLightPrimary = Color(0xFF0A56D4)           // 品牌深蓝色
+val TermiusLightSecondary = Color(0xFF64748B)         // 钢灰色（用于次要文字/图标）
+val TermiusLightTertiary = Color(0xFF0284C7)          // 天空蓝
+val TermiusLightBackground = Color(0xFFF1F5F9)       // 📌 核心：Termius 特有的清透浅蓝灰背景
+val TermiusLightSurfaceContainer = Color(0xFFFFFFFF)  // 📌 核心：纯白色的卡片/容器
+val TermiusLightOnSurface = Color(0xFF0F172A)         // 极深蓝黑文字
+val TermiusLightSecondaryContainer = Color(0xFFD6E6FF)// 底部导航选中的淡蓝胶囊底 / FAB底色
+val TermiusLightOnSecondaryContainer = Color(0xFF0A255C) // 胶囊内部的深蓝色图标
 
-val CyberDarkPrimary = Color(0xFF818CF8)
-val CyberDarkSecondary = Color(0xFF2DD4BF)
-val CyberDarkTertiary = Color(0xFFF472B6)
-val CyberDarkBackground = Color(0xFF0B0F19)
-val CyberDarkSurfaceContainer = Color(0xFF1E293B)
-val CyberDarkOnSurface = Color(0xFFF8FAFC)
-
-// ==================== ⚡ 方案二：元气潮酷 / 情绪波普 ====================
-val CoolLightPrimary = Color(0xFF1D4ED8)          // 克莱因蓝
-val CoolLightSecondary = Color(0xFF6B7280)        // 中性冷灰
-val CoolLightTertiary = Color(0xFFEA580C)         // 活力爆棚橙
-val CoolLightBackground = Color(0xFFFFFFFF)       
-val CoolLightSurfaceContainer = Color(0xFFF8FAFC) // 纯白偏蓝
-val CoolLightOnSurface = Color(0xFF0F172A)
-
-val CoolDarkPrimary = Color(0xFF60A5FA)           // 天空亮蓝
-val CoolDarkSecondary = Color(0xFF9CA3AF)         // 太空浅灰
-val CoolDarkTertiary = Color(0xFFFB923C)          // 柔和珊瑚橙
-val CoolDarkBackground = Color(0xFF0F172A)        // 黑洞夜蓝
-val CoolDarkSurfaceContainer = Color(0xFF1E293B)  
-val CoolDarkOnSurface = Color(0xFFF8FAFC)
-
-// ==================== 🍵 方案三：治愈自然 / 生机多米诺 ====================
-val NatureLightPrimary = Color(0xFF065F46)         // 翡翠深绿
-val NatureLightSecondary = Color(0xFF78350F)       // 焦糖大地色
-val NatureLightTertiary = Color(0xFF991B1B)        // 复古红陶
-val NatureLightBackground = Color(0xFFFFFFFF)      
-val NatureLightSurfaceContainer = Color(0xFFF4F4F5)// 暖调浅灰
-val NatureLightOnSurface = Color(0xFF18181B)
-
-val NatureDarkPrimary = Color(0xFF34D399)          // 呼吸感薄荷绿
-val NatureDarkSecondary = Color(0xFFFBBF24)        // 琥珀金黄
-val NatureDarkTertiary = Color(0xFFF87171)         // 暮色柔红
-val NatureDarkBackground = Color(0xFF121212)       // 玄武岩极深灰
-val NatureDarkSurfaceContainer = Color(0xFF18181B) 
-val NatureDarkOnSurface = Color(0xFFF4F4F5)
+// ==================== 🌙 Termius 经典深色系 ====================
+val TermiusDarkPrimary = Color(0xFF3B82F6)            // 📌 核心：明亮的电光蓝（FAB与高亮）
+val TermiusDarkSecondary = Color(0xFF94A3B8)          // 浅钢灰（用于次要文字/图标）
+val TermiusDarkTertiary = Color(0xFF38BDF8)           // 明亮青蓝
+val TermiusDarkBackground = Color(0xFF181F2A)         // 📌 核心：高级的黑洞蓝黑底色（非纯黑）
+val TermiusDarkSurfaceContainer = Color(0xFF222D3D)   // 📌 核心：稍亮一点的钢青色卡片/顶栏底栏
+val TermiusDarkOnSurface = Color(0xFFFFFFFF)          // 纯白文字
+val TermiusDarkSecondaryContainer = Color(0xFF2D3D54) // 底部导航选中的沉稳蓝灰胶囊底
+val TermiusDarkOnSecondaryContainer = Color(0xFFE2E8F0)// 胶囊内部的浅色图标
