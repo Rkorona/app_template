@@ -1,6 +1,5 @@
 package com.example.myapplication.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
@@ -17,7 +16,7 @@ private val DarkColorScheme = darkColorScheme(
     secondary = DarkSecondary,
     tertiary = DarkTertiary,
     background = DarkBackground,
-    surfaceContainer = DarkSurfaceContainer, // M3 特有：完美适配顶栏、底栏
+    surfaceContainer = DarkSurfaceContainer,
     onSurface = DarkOnSurface,
     onPrimary = DarkOnPrimary
 )
@@ -28,7 +27,7 @@ private val LightColorScheme = lightColorScheme(
     secondary = LightSecondary,
     tertiary = LightTertiary,
     background = LightBackground,
-    surfaceContainer = LightSurfaceContainer, // M3 特有：完美适配顶栏、底栏
+    surfaceContainer = LightSurfaceContainer,
     onSurface = LightOnSurface,
     onPrimary = LightOnPrimary
 )
@@ -36,7 +35,6 @@ private val LightColorScheme = lightColorScheme(
 @Composable
 fun MyApplicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // 📌 核心改动：默认设为 false，禁用系统动态壁纸取色，强制应用我们的“方案一”
     dynamicColor: Boolean = false, 
     content: @Composable () -> Unit
 ) {
@@ -44,15 +42,14 @@ fun MyApplicationTheme(
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        [span_4](start_span)}
-
+        }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography, // 保持你 Type.kt 里的排版配置
+        typography = Typography,
         content = content
     )
 }

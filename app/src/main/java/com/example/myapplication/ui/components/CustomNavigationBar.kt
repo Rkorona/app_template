@@ -35,7 +35,6 @@ fun ExpressiveNavigationBar(
         // Expressive 风格推荐使用较矮且色彩柔和的表面容器色
        // containerColor = MaterialTheme.colorScheme.surfaceContainer
         containerColor = MaterialTheme.colorScheme.surfaceContainer, 
-        titleContentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         // 1. 主页 (Q弹放大动画)
         NavigationBarItem(
