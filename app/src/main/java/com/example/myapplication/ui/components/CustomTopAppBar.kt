@@ -54,22 +54,22 @@ fun MediumTopAppBarExample() {
                         )
                     )
                 },
-                navigationIcon = {
-                    IconButton(onClick = { /* 返回事件 */ }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { /* 菜单事件 */ }) {
-                        Icon(
-                            imageVector = Icons.Filled.Menu,
-                            contentDescription = "Menu"
-                        )
-                    }
-                },
+                // navigationIcon = {
+                    // IconButton(onClick = { /* 返回事件 */ }) {
+                        // Icon(
+                            // imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            // contentDescription = "Back"
+                        // )
+                    // }
+                // },
+                // actions = {
+                    // IconButton(onClick = { /* 菜单事件 */ }) {
+                        // Icon(
+                            // imageVector = Icons.Filled.Menu,
+                            // contentDescription = "Menu"
+                        // )
+                    // }
+                // },
                 scrollBehavior = scrollBehavior
             )
         },
