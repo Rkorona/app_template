@@ -29,7 +29,7 @@ private val LightColorScheme = lightColorScheme(
     background = CoolLightBackground,
     surfaceContainer = CoolLightSurfaceContainer,
     onSurface = CoolLightOnSurface,
-    onPrimary = LightBackground
+    onPrimary = CoolLightBackground
 )
 
 @Composable
