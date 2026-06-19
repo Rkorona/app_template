@@ -1,5 +1,11 @@
 package com.example.myapplication.ui.screens
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.ui.draw.rotate
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -78,20 +84,144 @@ fun ScriptManagerScreen(
             .fillMaxSize()
             .padding(bottom = contentPadding.calculateBottomPadding()),
         
+        // ─── 🌟 升级完成：带精致微动效的多级悬浮扩展菜单 ───
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { /* 导入动作 */ },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                shape = RoundedCornerShape(18.dp)
+            var isFabExpanded by remember { mutableStateOf(false) }
+            
+            // 点击展开时加号顺时针旋转 45° 变成关闭交叉号
+            val rotationAngle by animateFloatAsState(
+                targetValue = if (isFabExpanded) 45f else 0f,
+                animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing),
+                label = "fabRotation"
+            )
+
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // 展开的子选项菜单武器库
+                AnimatedVisibility(
+                    visible = isFabExpanded,
+                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add")
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("导入项目", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(end = 6.dp) // 与主 FAB 轴线视觉对齐
+                    ) {
+                        // 选项一：新建单文件脚本
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 3.dp,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(
+                                    text = "新建单文件脚本",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    isFabExpanded = false
+                                    /* TODO: 触发新建文件动作 */
+                                },
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Terminal, contentDescription = "New File", modifier = Modifier.size(18.dp))
+                            }
+                        }
+
+                        // 选项二：新建工程项目
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 3.dp,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(
+                                    text = "新建工程项目",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    isFabExpanded = false
+                                    /* TODO: 触发新建项目动作 */
+                                },
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Folder, contentDescription = "New Project", modifier = Modifier.size(18.dp))
+                            }
+                        }
+
+                        // 选项三：导入本地已有项目
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                tonalElevation = 3.dp,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Text(
+                                    text = "导入本地已有项目",
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    isFabExpanded = false
+                                    /* 执行原文件导入选择动作 */
+                                },
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Build, contentDescription = "Import Project", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+
+                // ─── 🚀 主控制 FAB ───
+                FloatingActionButton(
+                    onClick = { isFabExpanded = !isFabExpanded },
+                    containerColor = if (isFabExpanded) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.primary,
+                    contentColor = if (isFabExpanded) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary,
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add, 
+                            contentDescription = "Add Menu",
+                            modifier = Modifier.rotate(rotationAngle) // 注入旋转联动
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isFabExpanded) "收起菜单" else "添加/新建", 
+                            fontWeight = FontWeight.Bold, 
+                            fontSize = 14.sp
+                        )
+                    }
                 }
             }
         }
@@ -142,7 +272,7 @@ fun ScriptManagerScreen(
                 items(filteredList) { script ->
                     ScriptCard(
                         script = script,
-                        onExecuteNow = { activeTerminalScript = script } // 👈 注入点击联动
+                        onExecuteNow = { activeTerminalScript = script }
                     )
                 }
             }
@@ -162,7 +292,7 @@ fun ScriptManagerScreen(
 @Composable
 fun ScriptCard(
     script: ScriptProject,
-    onExecuteNow: () -> Unit // 👈 增加动作回调参数
+    onExecuteNow: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -243,7 +373,7 @@ fun ScriptCard(
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FilledIconButton(
-                        onClick = onExecuteNow, // 👈 绑定触发动作
+                        onClick = onExecuteNow, 
                         enabled = isExecutable, 
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = script.themeColor.copy(alpha = 0.1f),
