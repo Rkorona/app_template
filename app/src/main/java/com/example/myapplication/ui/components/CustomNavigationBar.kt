@@ -6,6 +6,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Alarm 
+import androidx.compose.material.icons.filled.Code 
+import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
@@ -40,22 +43,30 @@ fun ExpressiveNavigationBar(
             onClick = { onNavigate("Dashboard") },
             alwaysShowLabel = false, // 只有选中时才显示标签
             label = { Text("仪表盘") },
-            // 📌 修正：动画判断必须跟路由字符串 "Dashboard" 完全一致
             icon = { AnimatedHomeIcon(selected = currentRoute == "Dashboard") }
         )
 
         // 2. 脚本管理 (向上顶一下的果冻动画)
+        // 2. 脚本管理 (全新换装：代码括号与敲击跃动动画)
         NavigationBarItem(
             selected = currentRoute == "ScriptManager",
             onClick = { onNavigate("ScriptManager") },
             alwaysShowLabel = false,
             label = { Text("脚本管理") },
-            // 📌 修正：动画判断必须跟路由字符串 "ScriptManager" 完全一致
-            icon = { AnimatedProfileIcon(selected = currentRoute == "ScriptManager") }
+            icon = { AnimatedCodeIcon(selected = currentRoute == "ScriptManager") } // 👈 换成专用的代码图标动效
+        )
+          
+
+        // ✨ 3. 定时任务 (核心新增：左右疯狂摇摆的小闹钟)
+        NavigationBarItem(
+            selected = currentRoute == "ScheduledTasks",
+            onClick = { onNavigate("ScheduledTasks") },
+            alwaysShowLabel = false,
+            label = { Text("定时任务") },
+            icon = { AnimatedAlarmIcon(selected = currentRoute == "ScheduledTasks") }
         )
 
-        // 3. 设置 (炫酷齿轮旋转一圈)
-        // 📌 修正：全部改成小写 "settings"，与你的 MainScreen 严格对齐！
+        // 4. 设置 (炫酷齿轮旋转一圈)
         NavigationBarItem(
             selected = currentRoute == "settings",
             onClick = { onNavigate("settings") },
@@ -67,6 +78,44 @@ fun ExpressiveNavigationBar(
 }
 
 // ==================== 🛠️ 图标微动效组件库 ====================
+
+/**
+ * ✨ 新增闹钟图标：被选中时高频左右晃动模拟“闹钟打铃”，随后弹性复位
+ */
+@Composable
+fun AnimatedAlarmIcon(selected: Boolean) {
+    val rotation = remember { Animatable(0f) }
+
+    LaunchedEffect(selected) {
+        if (selected) {
+            rotation.snapTo(0f) // 重置角度
+            
+            // 快速左右微调抖动，模拟机械打铃质感
+            val duration = 50
+            rotation.animateTo(18f, animationSpec = tween(durationMillis = duration))
+            rotation.animateTo(-18f, animationSpec = tween(durationMillis = duration))
+            rotation.animateTo(14f, animationSpec = tween(durationMillis = duration))
+            rotation.animateTo(-14f, animationSpec = tween(durationMillis = duration))
+            rotation.animateTo(10f, animationSpec = tween(durationMillis = duration))
+            rotation.animateTo(-10f, animationSpec = tween(durationMillis = duration))
+            
+            // 最终通过中度Q弹动画回归C位
+            rotation.animateTo(
+                targetValue = 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            )
+        }
+    }
+
+    Icon(
+        imageVector = Icons.Filled.Alarm,
+        contentDescription = "ScheduledTasks",
+        modifier = Modifier.graphicsLayer(rotationZ = rotation.value)
+    )
+}
 
 /**
  * 设置图标：被选中时旋转一圈，并带有弹性回弹
@@ -124,24 +173,46 @@ fun AnimatedHomeIcon(selected: Boolean) {
  * 个人图标：被选中时向上弹跳一下
  */
 @Composable
-fun AnimatedProfileIcon(selected: Boolean) {
-    val translationY = remember { Animatable(0f) }
+fun AnimatedCodeIcon(selected: Boolean) {
+    val scale = remember { Animatable(1f) }
+    val rotation = remember { Animatable(0f) }
 
     LaunchedEffect(selected) {
         if (selected) {
-            translationY.snapTo(0f)
-            translationY.animateTo(-8f, animationSpec = tween(durationMillis = 100))
-            translationY.animateTo(
-                targetValue = 0f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-            )
+            // 利用协程作用域让“缩放”和“旋转”两个动画完美并行，交织出极佳的灵动感
+            launch {
+                scale.snapTo(1f)
+                scale.animateTo(1.28f, animationSpec = tween(durationMillis = 100))
+                scale.animateTo(
+                    targetValue = 1.0f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                )
+            }
+            
+            launch {
+                rotation.snapTo(0f)
+                // 模拟代码敲击的左右轻微侧摆
+                rotation.animateTo(-14f, animationSpec = tween(durationMillis = 60))
+                rotation.animateTo(14f, animationSpec = tween(durationMillis = 60))
+                rotation.animateTo(
+                    targetValue = 0f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMedium
+                    )
+                )
+            }
         }
     }
 
     Icon(
-        imageVector = Icons.Filled.Person,
+        imageVector = Icons.Filled.Code, // 👈 正统代码符号
         contentDescription = "ScriptManager",
-        modifier = Modifier.graphicsLayer(translationY = translationY.value)
+        modifier = Modifier.graphicsLayer(
+            scaleX = scale.value,
+            scaleY = scale.value,
+            rotationZ = rotation.value
+        )
     )
 }
 
