@@ -39,7 +39,8 @@ fun MainScreen() {
     ) { innerPadding ->
         // 📌 核心路由逻辑：根据选中的标签，渲染对应的独立页面文件！
         when (currentRoute) {
-            "home" -> DashboardScreen(modifier = Modifier.padding(innerPadding))
+            "home" -> DashboardScreen(contentPadding = innerPadding)
+
             "settings" -> SettingsScreen(innerPadding = innerPadding)
             "profile" -> HomeScreen(innerPadding = innerPadding) // 暂时用同一个代替
         }

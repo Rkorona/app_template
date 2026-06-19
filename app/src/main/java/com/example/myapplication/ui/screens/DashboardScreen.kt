@@ -5,10 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,12 +17,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun DashboardScreen(modifier: Modifier = Modifier) {
-    
+fun DashboardScreen(
+    // 📌 1. 声明接收来自外层的系统内边距（包含顶栏和底栏的高度）
+    contentPadding: PaddingValues = PaddingValues(), 
+    modifier: Modifier = Modifier
+) {
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
+        // 📌 2. 这里的外壳 modifier 保持纯净，只负责填满全屏
+        modifier = modifier.fillMaxSize(),
+        
+        // 📌 3. 核心魔法：将系统边距与我们自定义的 16.dp 完美的累加在一起
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = contentPadding.calculateTopPadding() + 16.dp,
+            bottom = contentPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // ==== 1. 后台守护状态 ====
