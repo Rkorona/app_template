@@ -28,24 +28,24 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// 📌 升级版依赖环境状态枚举
+import com.example.myapplication.ui.components.TerminalConsoleBottomSheet // 👈 引入共享终端
+
 enum class DependencyStatus {
-    None,       // 无需依赖 (单文件孤勇者)
-    Configured, // 检测到依赖文件 (如 requirements.txt / package.json) 但未安装
-    Installed,  // 依赖已就绪
-    Error       // 依赖安装失败
+    None,       
+    Configured, 
+    Installed,  
+    Error       
 }
 
-// 📌 升级版项目制脚本数据模型
 data class ScriptProject(
     val name: String,
-    val type: String, // Shell, Python, Node.js
+    val type: String, 
     val trigger: String,
     val lastRun: String,
     val isRunning: Boolean = false,
     val themeColor: Color,
-    val isFolder: Boolean,               // true: 项目文件夹, false: 单文件
-    val entryPoint: String = "",         // 文件夹项目的启动入口 (如 main.py)
+    val isFolder: Boolean,               
+    val entryPoint: String = "",         
     val dependencyStatus: DependencyStatus = DependencyStatus.None
 )
 
@@ -55,7 +55,6 @@ fun ScriptManagerScreen(
     contentPadding: PaddingValues = PaddingValues(),
     modifier: Modifier = Modifier
 ) {
-    // 假数据体系
     val scripts = remember {
         listOf(
             ScriptProject("telegram_bot", "Python", "⏰ crontab: */10 * * * *", "上次成功: 2分钟前", true, Color(0xFF38BDF8), isFolder = true, entryPoint = "main.py", dependencyStatus = DependencyStatus.Installed),
@@ -71,48 +70,38 @@ fun ScriptManagerScreen(
     var selectedFilter by remember { mutableStateOf("全部") }
     val filters = listOf("全部", "Python", "Shell", "Node.js")
 
+    // ─── 🎛️ 终端联动状态 ───
+    var activeTerminalScript by remember { mutableStateOf<ScriptProject?>(null) }
+
     Scaffold(
-        // 🛠️ 核心修复 1：让 Scaffold 的底部边界完美收缩到导航栏上方，把被埋掉的 FAB 拯救出来！
-        modifier = modifier
-            .fillMaxSize()
-            .padding(bottom = contentPadding.calculateBottomPadding()),
+        modifier = modifier.fillMaxSize(),
         floatingActionButton = {
-            // 🌟 换上了更符合 M3 Expressive 规范的 Extended FAB，极具动感与辨识度
-            ExtendedFloatingActionButton(
-                onClick = { /* 弹出底部创建面板：新建单文件/导入项目文件夹 */ },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = RoundedCornerShape(16.dp),
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = 3.dp,
-                    pressedElevation = 6.dp
-                )
+            FloatingActionButton(
+                onClick = { /* 导入动作 */ },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                shape = RoundedCornerShape(18.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add Project",
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("新建配置", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("导入项目", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                }
             }
         }
     ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(
-                    top = contentPadding.calculateTopPadding() + 8.dp,
-                    bottom = innerPadding.calculateBottomPadding()
-                )
+                .padding(top = contentPadding.calculateTopPadding() + 8.dp, bottom = innerPadding.calculateBottomPadding())
         ) {
-            // 🔍 1. 战术搜索栏
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                 placeholder = { Text("搜索脚本或工程文件夹...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                 shape = RoundedCornerShape(16.dp),
@@ -124,12 +113,8 @@ fun ScriptManagerScreen(
                 )
             )
 
-            // 🏷️ 2. 横向滚动过滤标签
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 filters.forEach { filter ->
@@ -138,44 +123,44 @@ fun ScriptManagerScreen(
                         selected = isSelected,
                         onClick = { selectedFilter = filter },
                         label = { Text(filter, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                            selectedLabelColor = MaterialTheme.colorScheme.primary,
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.6f),
-                            labelColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            enabled = true,
-                            selected = isSelected,
-                            borderColor = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                            selectedBorderColor = MaterialTheme.colorScheme.primary,
-                            borderWidth = 1.dp,
-                            selectedBorderWidth = 1.2.dp
-                        ),
                         shape = RoundedCornerShape(10.dp)
                     )
                 }
             }
 
-            // 📜 3. 进化版自动化武器库列表
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
-                // 🛠️ 核心修复 2：将 bottom 边距安全值拉高到 96.dp！
-                // 确保列表滑到最底时，最后一张卡片完全越过 FAB 按钮，绝对不产生一丁点物理遮挡。
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(scripts.filter { selectedFilter == "全部" || it.type == selectedFilter }) { script ->
-                    ScriptCard(script = script)
+                val filteredList = scripts.filter { 
+                    (selectedFilter == "全部" || it.type == selectedFilter) && it.name.contains(searchQuery, ignoreCase = true)
+                }
+                items(filteredList) { script ->
+                    ScriptCard(
+                        script = script,
+                        onExecuteNow = { activeTerminalScript = script } // 👈 注入点击联动
+                    )
                 }
             }
         }
     }
+
+    // ─── 🌟 终端审计舱合流 ───
+    activeTerminalScript?.let { script ->
+        TerminalConsoleBottomSheet(
+            taskName = script.name,
+            scriptName = if (script.isFolder) script.entryPoint else script.name,
+            onDismiss = { activeTerminalScript = null }
+        )
+    }
 }
 
-// 📌 核心重构单体：支持文件夹项目与环境自检的 Expressive 卡片
 @Composable
-fun ScriptCard(script: ScriptProject) {
+fun ScriptCard(
+    script: ScriptProject,
+    onExecuteNow: () -> Unit // 👈 增加动作回调参数
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.05f,
@@ -195,12 +180,10 @@ fun ScriptCard(script: ScriptProject) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // ─── 上半部分：核心项目信息 ───
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. 左侧：智能视觉分流徽章
                 Box(
                     modifier = Modifier
                         .size(46.dp)
@@ -212,9 +195,7 @@ fun ScriptCard(script: ScriptProject) {
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(script.themeColor.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                        modifier = Modifier.fillMaxSize().background(script.themeColor.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -228,33 +209,17 @@ fun ScriptCard(script: ScriptProject) {
 
                 Spacer(modifier = Modifier.width(14.dp))
 
-                // 2. 中间：极客信息舱
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = script.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        
-                        Box(
-                            modifier = Modifier
-                                .background(script.themeColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        ) {
+                        Text(text = script.name, fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Box(modifier = Modifier.background(script.themeColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
                             Text(script.type, fontSize = 10.sp, color = script.themeColor, fontWeight = FontWeight.Bold)
                         }
-
                         if (script.isRunning) {
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(Color(0xFF22C55E), RoundedCornerShape(50))
-                            )
+                            Box(modifier = Modifier.size(6.dp).background(Color(0xFF22C55E), RoundedCornerShape(50)))
                         }
                     }
                     
@@ -264,30 +229,18 @@ fun ScriptCard(script: ScriptProject) {
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(top = 2.0.dp)
+                            modifier = Modifier.padding(top = 2.dp)
                         )
                     }
                     
                     Spacer(modifier = Modifier.height(4.dp))
-                    
-                    Text(
-                        text = script.trigger,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                    )
-                    
-                    Text(
-                        text = script.lastRun,
-                        fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                    )
+                    Text(text = script.trigger, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
+                    Text(text = script.lastRun, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
                 }
 
-                // 3. 右侧：动作控制台
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     FilledIconButton(
-                        onClick = { /* 立即执行 */ },
+                        onClick = onExecuteNow, // 👈 绑定触发动作
                         enabled = isExecutable, 
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = script.themeColor.copy(alpha = 0.1f),
@@ -298,63 +251,37 @@ fun ScriptCard(script: ScriptProject) {
                         modifier = Modifier.size(36.dp),
                         shape = RoundedCornerShape(10.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Run",
-                            modifier = Modifier.size(18.dp)
-                        )
+                        Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "Run", modifier = Modifier.size(18.dp))
                     }
                     
-                    IconButton(onClick = { /* 更多控制 */ }) {
-                        Icon(
-                            Icons.Default.MoreVert, 
-                            contentDescription = "More", 
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                        )
+                    IconButton(onClick = { /* 更多 */ }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
                     }
                 }
             }
 
-            // ─── 下半部分：环境依赖智能管理舱 ───
             AnimatedVisibility(visible = script.isFolder && script.dependencyStatus != DependencyStatus.None) {
                 Column {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(vertical = 12.dp),
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
-                    )
-                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             val (statusText, statusColor) = when (script.dependencyStatus) {
                                 DependencyStatus.Configured -> "检测到未安装依赖环境" to MaterialTheme.colorScheme.error
                                 DependencyStatus.Installed -> "依赖环境已完全就绪" to Color(0xFF22C55E)
                                 DependencyStatus.Error -> "依赖配置失败，环境异常" to MaterialTheme.colorScheme.error
                                 else -> "" to Color.Unspecified
                             }
-                            
-                            Box(
-                                modifier = Modifier
-                                    .size(6.dp)
-                                    .background(statusColor, RoundedCornerShape(50))
-                            )
-                            Text(
-                                text = statusText, 
-                                fontSize = 11.sp, 
-                                color = statusColor, 
-                                fontWeight = FontWeight.SemiBold
-                            )
+                            Box(modifier = Modifier.size(6.dp).background(statusColor, RoundedCornerShape(50)))
+                            Text(text = statusText, fontSize = 11.sp, color = statusColor, fontWeight = FontWeight.SemiBold)
                         }
 
                         if (script.dependencyStatus == DependencyStatus.Configured || script.dependencyStatus == DependencyStatus.Error) {
                             Button(
-                                onClick = { /* 执行环境依赖安装 */ },
+                                onClick = { /* 安装依赖 */ },
                                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
@@ -365,18 +292,9 @@ fun ScriptCard(script: ScriptProject) {
                                 Text("一键安装", fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         } else {
-                            TextButton(
-                                onClick = { /* 查看项目文件详情 */ },
-                                modifier = Modifier.height(28.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp)
-                            ) {
+                            TextButton(onClick = { /* 详情 */ }, modifier = Modifier.height(28.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
                                 Text("目录详情", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                                Icon(
-                                    imageVector = Icons.Default.ChevronRight, 
-                                    contentDescription = null, 
-                                    modifier = Modifier.size(14.dp), 
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
+                                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
