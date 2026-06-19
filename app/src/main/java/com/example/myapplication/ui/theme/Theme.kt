@@ -12,24 +12,24 @@ import androidx.compose.ui.platform.LocalContext
 
 // 🌙 深色配置映射
 private val DarkColorScheme = darkColorScheme(
-    primary = DarkPrimary,
-    secondary = DarkSecondary,
-    tertiary = DarkTertiary,
-    background = DarkBackground,
-    surfaceContainer = DarkSurfaceContainer,
-    onSurface = DarkOnSurface,
-    onPrimary = DarkOnPrimary
+    primary = CoolDarkPrimary,
+    secondary = CoolDarkSecondary,
+    tertiary = CoolDarkTertiary,
+    background = CoolDarkBackground,
+    surfaceContainer = CoolDarkSurfaceContainer,
+    onSurface = CoolDarkOnSurface,
+    onPrimary = CoolDarkOnPrimary
 )
 
 // ☀️ 浅色配置映射
 private val LightColorScheme = lightColorScheme(
-    primary = LightPrimary,
-    secondary = LightSecondary,
-    tertiary = LightTertiary,
-    background = LightBackground,
-    surfaceContainer = LightSurfaceContainer,
-    onSurface = LightOnSurface,
-    onPrimary = LightOnPrimary
+    primary = CoolLightPrimary,
+    secondary = CoolLightSecondary,
+    tertiary = CoolLightTertiary,
+    background = CoolLightBackground,
+    surfaceContainer = CoolLightSurfaceContainer,
+    onSurface = CoolLightOnSurface,
+    onPrimary = CoolLightOnPrimary
 )
 
 @Composable
