@@ -33,3 +33,21 @@ interface DependencyDao {
     @Delete
     suspend fun delete(dependency: DependencyEntity)
 }
+
+@Dao
+interface ScriptDao {
+    @Query("SELECT * FROM scripts")
+    fun getAll(): Flow<List<ScriptEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(script: ScriptEntity)
+
+    @Query("SELECT * FROM scripts WHERE name = :name LIMIT 1")
+    suspend fun getByName(name: String): ScriptEntity?
+
+    @Delete
+    suspend fun delete(script: ScriptEntity)
+
+    @Query("DELETE FROM scripts WHERE name = :name")
+    suspend fun deleteByName(name: String)
+}

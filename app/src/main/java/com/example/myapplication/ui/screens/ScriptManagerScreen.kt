@@ -46,69 +46,54 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.util.UUID
-
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.myapplication.data.ScriptEntity
 import com.example.myapplication.ui.components.TerminalConsoleBottomSheet
+import com.example.myapplication.viewmodel.ScriptViewModel
 
 enum class DependencyStatus { None, Configured, Installed, Error }
-
-data class ScriptProject(
-    val id: String = UUID.randomUUID().toString(),
-    val name: String,
-    val type: String,
-    val trigger: String,
-    val lastRun: String,
-    val isRunning: Boolean = false,
-    val themeColor: Color,
-    val isFolder: Boolean,
-    val entryPoint: String = "",
-    val dependencyStatus: DependencyStatus = DependencyStatus.None,
-    val isInstalling: Boolean = false
-)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScriptManagerScreen(
     contentPadding: PaddingValues = PaddingValues(),
-    onOpenDetail: (ScriptProject) -> Unit = {},
+    onOpenDetail: (ScriptEntity) -> Unit = {},
+    viewModel: ScriptViewModel = viewModel(), // 👈 注入物理存储同步的 ViewModel
     modifier: Modifier = Modifier
 ) {
-    // 💡 移除所有硬编码，初始状态为空表
-    val scripts = remember { mutableStateListOf<ScriptProject>() }
+    // 💡 实时观察物理文件夹与数据库同步后的纯净列表数据
+    val scripts by viewModel.scriptsList.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("全部") }
     val filters = listOf("全部", "Python", "Shell", "Node.js")
 
-    var activeTerminalScript by remember { mutableStateOf<ScriptProject?>(null) }
-    var scriptPendingDelete by remember { mutableStateOf<ScriptProject?>(null) }
+    // 弹窗与控制状态
+    var activeTerminalScript by remember { mutableStateOf<ScriptEntity?>(null) }
+    var scriptPendingDelete by remember { mutableStateOf<ScriptEntity?>(null) }
     var isFabExpanded by remember { mutableStateOf(false) }
 
-    val coroutineScope = rememberCoroutineScope()
+    // ─── 🛠️ 新建文件的表单对话框状态 ───
+    var showSingleFileDialog by remember { mutableStateOf(false) }
+    var singleFileName by remember { mutableStateOf("") }
 
-    fun installDependencies(target: ScriptProject) {
-        val idx = scripts.indexOfFirst { it.id == target.id }
-        if (idx == -1) return
-        scripts[idx] = scripts[idx].copy(isInstalling = true)
-        coroutineScope.launch {
-            delay(1500)
-            val current = scripts.indexOfFirst { it.id == target.id }
-            if (current != -1) scripts[current] = scripts[current].copy(isInstalling = false, dependencyStatus = DependencyStatus.Installed)
-        }
-    }
+    var showFolderDialog by remember { mutableStateOf(false) }
+    var folderName by remember { mutableStateOf("") }
+    var folderEntryPoint by remember { mutableStateOf("main.py") }
 
-    fun duplicateScript(target: ScriptProject) {
-        val idx = scripts.indexOfFirst { it.id == target.id }
-        if (idx == -1) return
-        scripts.add(idx + 1, target.copy(id = UUID.randomUUID().toString(), name = "${target.name}_copy", isRunning = false))
+    // 每次重新切入本页面时，自动执行一次静默双轨物理扫描
+    LaunchedEffect(Unit) {
+        viewModel.syncFilesWithDatabase()
     }
 
     Scaffold(
         modifier = modifier
             .fillMaxSize()
             .padding(bottom = contentPadding.calculateBottomPadding()),
+
+        // ─── 🌟 多级悬浮扩展菜单 ───
         floatingActionButton = {
             val rotationAngle by animateFloatAsState(
                 targetValue = if (isFabExpanded) 45f else 0f,
@@ -116,12 +101,47 @@ fun ScriptManagerScreen(
                 label = "fabRotation"
             )
 
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                AnimatedVisibility(visible = isFabExpanded, enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom), exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)) {
-                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.padding(end = 6.dp)) {
-                        FabMenuOption(label = "新建单文件脚本", icon = Icons.Default.Terminal, onClick = { isFabExpanded = false })
-                        FabMenuOption(label = "新建工程项目", icon = Icons.Default.Folder, onClick = { isFabExpanded = false })
-                        FabMenuOption(label = "导入本地已有项目", icon = Icons.Default.Build, onClick = { isFabExpanded = false })
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                AnimatedVisibility(
+                    visible = isFabExpanded,
+                    enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
+                    exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.padding(end = 6.dp)
+                    ) {
+                        FabMenuOption(
+                            label = "新建单文件脚本",
+                            icon = Icons.Default.Terminal,
+                            onClick = { 
+                                isFabExpanded = false
+                                singleFileName = ""
+                                showSingleFileDialog = true // 唤醒单文件创建对话框
+                            }
+                        )
+                        FabMenuOption(
+                            label = "新建工程项目",
+                            icon = Icons.Default.Folder,
+                            onClick = { 
+                                isFabExpanded = false
+                                folderName = ""
+                                folderEntryPoint = "main.py"
+                                showFolderDialog = true // 唤醒文件夹工程创建对话框
+                            }
+                        )
+                        FabMenuOption(
+                            label = "物理刷新对齐",
+                            icon = Icons.Default.Build,
+                            onClick = { 
+                                isFabExpanded = false
+                                viewModel.syncFilesWithDatabase() // 手动触发强制扫描
+                            }
+                        )
                     }
                 }
 
@@ -131,26 +151,43 @@ fun ScriptManagerScreen(
                     contentColor = if (isFabExpanded) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onPrimary,
                     shape = RoundedCornerShape(18.dp)
                 ) {
-                    Row(modifier = Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Add Menu", modifier = Modifier.rotate(rotationAngle))
+                    Row(
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Menu",
+                            modifier = Modifier.rotate(rotationAngle)
+                        )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(text = if (isFabExpanded) "收起菜单" else "添加/新建", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = if (isFabExpanded) "收起菜单" else "添加/新建",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize()) {
-            Column(modifier = Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding() + 8.dp, bottom = innerPadding.calculateBottomPadding())) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = contentPadding.calculateTopPadding() + 8.dp, bottom = innerPadding.calculateBottomPadding())
+            ) {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    placeholder = { Text("搜索脚本或工程文件夹...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
+                    placeholder = { Text("搜索物理存储中的脚本...", color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     trailingIcon = {
                         AnimatedVisibility(visible = searchQuery.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
-                            IconButton(onClick = { searchQuery = "" }) { Icon(Icons.Default.Close, contentDescription = "清空搜索") }
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "清空搜索")
+                            }
                         }
                     },
                     singleLine = true,
@@ -172,9 +209,19 @@ fun ScriptManagerScreen(
                         FilterChip(
                             selected = isSelected,
                             onClick = { selectedFilter = filter },
-                            label = { Text(filter, style = MaterialTheme.typography.labelLarge, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                            label = {
+                                Text(
+                                    filter,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
                             leadingIcon = {
-                                AnimatedVisibility(visible = isSelected, enter = fadeIn() + expandHorizontally(), exit = fadeOut() + shrinkHorizontally()) {
+                                AnimatedVisibility(
+                                    visible = isSelected,
+                                    enter = fadeIn() + expandHorizontally(),
+                                    exit = fadeOut() + shrinkHorizontally()
+                                ) {
                                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
                                 }
                             },
@@ -192,7 +239,6 @@ fun ScriptManagerScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 完美的空状态展示
                     if (filteredList.isEmpty()) {
                         item { EmptyScriptsState(hasAnyScripts = scripts.isNotEmpty()) }
                     } else {
@@ -202,8 +248,6 @@ fun ScriptManagerScreen(
                                 onExecuteNow = { activeTerminalScript = script },
                                 onOpenDetail = { onOpenDetail(script) },
                                 onViewLogs = { activeTerminalScript = script },
-                                onInstallDependencies = { installDependencies(script) },
-                                onDuplicate = { duplicateScript(script) },
                                 onDeleteRequest = { scriptPendingDelete = script }
                             )
                         }
@@ -211,33 +255,148 @@ fun ScriptManagerScreen(
                 }
             }
 
-            AnimatedVisibility(visible = isFabExpanded, enter = fadeIn(), exit = fadeOut()) {
+            // 蒙层收起 FAB 菜单
+            AnimatedVisibility(
+                visible = isFabExpanded,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { isFabExpanded = false }
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { isFabExpanded = false }
                 )
             }
         }
     }
 
+    // ─── 🌟 终端审计舱合流 ───
     activeTerminalScript?.let { script ->
-        TerminalConsoleBottomSheet(taskName = script.name, scriptName = if (script.isFolder) script.entryPoint else script.name, onDismiss = { activeTerminalScript = null })
+        TerminalConsoleBottomSheet(
+            taskName = script.name,
+            scriptName = if (script.isFolder) script.entryPoint else script.name,
+            onDismiss = { activeTerminalScript = null }
+        )
     }
 
+    // ─── 🗑️ 物理删除二次确认弹窗 ───
     scriptPendingDelete?.let { target ->
         AlertDialog(
             onDismissRequest = { scriptPendingDelete = null },
             icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
-            title = { Text("删除「${target.name}」？") },
-            text = { Text("脚本文件、定时任务和已保存的执行记录会一并移除，此操作无法撤销。") },
+            title = { Text("物理删除「${target.name}」？") },
+            text = { Text("这将永久从手机存储 (/sdcard/QLPanel/scripts) 中彻底抹除此文件/文件夹。此操作无法撤销。") },
             confirmButton = {
-                TextButton(onClick = { scripts.removeAll { it.id == target.id }; scriptPendingDelete = null }) {
-                    Text("删除", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
+                TextButton(onClick = {
+                    viewModel.deleteScript(target)
+                    scriptPendingDelete = null
+                }) {
+                    Text("彻底删除", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold)
                 }
             },
-            dismissButton = { TextButton(onClick = { scriptPendingDelete = null }) { Text("取消") } }
+            dismissButton = {
+                TextButton(onClick = { scriptPendingDelete = null }) { Text("取消") }
+            }
+        )
+    }
+
+    // ─── 🛠️ 弹窗1：新建单文件对话框 ───
+    if (showSingleFileDialog) {
+        AlertDialog(
+            onDismissRequest = { showSingleFileDialog = false },
+            shape = RoundedCornerShape(24.dp),
+            title = { Text("新建单文件脚本", fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text("请指定带后缀的文件名：", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = singleFileName,
+                        onValueChange = { singleFileName = it.trim() },
+                        placeholder = { Text("例如: task.py 或 check.js") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val fileExt = singleFileName.substringAfterLast(".", "")
+                        val isSupported = fileExt == "py" || fileExt == "js" || fileExt == "sh"
+                        if (singleFileName.isNotBlank() && isSupported) {
+                            val scriptType = when(fileExt) {
+                                "py" -> "Python"
+                                "js" -> "Node.js"
+                                else -> "Shell"
+                            }
+                            viewModel.createSingleFile(singleFileName, scriptType)
+                            showSingleFileDialog = false
+                        }
+                    },
+                    enabled = singleFileName.contains(".") && singleFileName.length > 3
+                ) {
+                    Text("创建")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSingleFileDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    // ─── 🛠️ 弹窗2：新建文件夹工程对话框 ───
+    if (showFolderDialog) {
+        AlertDialog(
+            onDismissRequest = { showFolderDialog = false },
+            shape = RoundedCornerShape(24.dp),
+            title = { Text("新建文件夹工程项目", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it.trim() },
+                        label = { Text("工程文件夹名称") },
+                        placeholder = { Text("例如: auto_task_hub") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                    OutlinedTextField(
+                        value = selectedScript, // 临时在此重用 selectedScript 作为入口文件输入
+                        onValueChange = { selectedScript = it.trim() },
+                        label = { Text("配置入口执行文件名") },
+                        placeholder = { Text("例如: main.py 或 index.js") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                val isValid = name.isNotBlank() && selectedScript.isNotBlank()
+                Button(
+                    onClick = {
+                        viewModel.addOrUpdateDependency( // 💡 我们这里直接调用通用保存方法保存项目实体
+                            // 我们可以在 ViewModel 里增加 addScript 行为，或者由于 ConfigViewModel 是专门处理 Env/Deps 的，
+                            // 我们可以临时借助一个通用的机制把数据插进去。不过在当前状态下，我们可以用 viewModel 的数据库框架，
+                            // 或者直接借助 Termux 环境来创建。为了配合 UI，我们可以临时向 scripts 集合插入这个项目，
+                            // 并在下一阶段正式存盘。
+                            /* 这里在下一阶段接入真实的 ScriptViewModel，此处先跑通 UI 闭环 */
+                            showFolderDialog = false
+                        )
+                    },
+                    enabled = isValid
+                ) {
+                    Text("创建工程")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showFolderDialog = false }) { Text("取消") }
+            }
         )
     }
 }
@@ -245,10 +404,26 @@ fun ScriptManagerScreen(
 @Composable
 private fun FabMenuOption(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceContainerHigh, tonalElevation = 3.dp, modifier = Modifier.padding(end = 8.dp)) {
-            Text(text = label, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 3.dp,
+            modifier = Modifier.padding(end = 8.dp)
+        ) {
+            Text(
+                text = label,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
         }
-        SmallFloatingActionButton(onClick = onClick, containerColor = MaterialTheme.colorScheme.secondaryContainer, contentColor = MaterialTheme.colorScheme.onSecondaryContainer, shape = RoundedCornerShape(12.dp)) {
+        SmallFloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            shape = RoundedCornerShape(12.dp)
+        ) {
             Icon(icon, contentDescription = label, modifier = Modifier.size(18.dp))
         }
     }
@@ -257,111 +432,222 @@ private fun FabMenuOption(label: String, icon: androidx.compose.ui.graphics.vect
 @Composable
 private fun EmptyScriptsState(hasAnyScripts: Boolean) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 56.dp, bottom = 24.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 56.dp, bottom = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(imageVector = if (hasAnyScripts) Icons.Default.Search else Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
+        Icon(
+            imageVector = if (hasAnyScripts) Icons.Default.Search else Icons.Default.Terminal,
+            contentDescription = null,
+            modifier = Modifier.size(40.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        )
         Spacer(Modifier.height(12.dp))
-        Text(text = if (hasAnyScripts) "没有找到匹配的脚本" else "还没有任何脚本", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+        Text(
+            text = if (hasAnyScripts) "没有找到匹配的脚本" else "还没有任何脚本",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
         Spacer(Modifier.height(4.dp))
-        Text(text = if (hasAnyScripts) "试试其他关键词，或切换上方的分类筛选" else "点击右下角“添加/新建”创建第一个脚本", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            text = if (hasAnyScripts) "系统未扫描到符合后缀的文件，请先创建或从电脑端导入" else "点击右下角“添加/新建”在 /sdcard/QLPanel 下创建第一个代码文件",
+            style = MaterialTheme.typography.bodySmall,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 24.dp)
+        )
     }
 }
 
 @Composable
-fun ScriptCard(script: ScriptProject, onExecuteNow: () -> Unit, onOpenDetail: () -> Unit = {}, onViewLogs: () -> Unit = {}, onInstallDependencies: () -> Unit = {}, onDuplicate: () -> Unit = {}, onDeleteRequest: () -> Unit = {}, modifier: Modifier = Modifier) {
+fun ScriptCard(
+    script: ScriptEntity, // 👈 直接对齐数据库实体
+    onExecuteNow: () -> Unit,
+    onOpenDetail: () -> Unit = {},
+    onViewLogs: () -> Unit = {},
+    onDeleteRequest: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-    val pulseAlpha by infiniteTransition.animateFloat(initialValue = 0.05f, targetValue = 0.25f, animationSpec = infiniteRepeatable(animation = tween(1200, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse), label = "pulseAlpha")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.05f,
+        targetValue = 0.25f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1200, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+
     var showMoreMenu by remember { mutableStateOf(false) }
-    val isExecutable = !script.isInstalling && (script.dependencyStatus == DependencyStatus.None || script.dependencyStatus == DependencyStatus.Installed)
-    val lastRunColor = if (script.lastRun.contains("失败") || script.lastRun.contains("错误")) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+
+    // 将数据库中 hex 的颜色安全反解析为 Compose 颜色
+    val themeColor = remember(script.themeColorHex) {
+        try {
+            Color(android.graphics.Color.parseColor(script.themeColorHex))
+        } catch (e: Exception) {
+            Color(0xFF38BDF8)
+        }
+    }
+
+    // 从数据库字符串中安全映射依赖状态枚举
+    val dependencyStatusEnum = remember(script.dependencyStatus) {
+        try {
+            DependencyStatus.valueOf(script.dependencyStatus)
+        } catch (e: Exception) {
+            DependencyStatus.None
+        }
+    }
+
+    val lastRunColor = if (script.lastRun.contains("失败") || script.lastRun.contains("错误")) {
+        MaterialTheme.colorScheme.error
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+    }
 
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
         shape = RoundedCornerShape(20.dp),
-        modifier = modifier.fillMaxWidth().expressiveClickable(onOpenDetail)
+        modifier = modifier
+            .fillMaxWidth()
+            .expressiveClickable(onOpenDetail)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(modifier = Modifier.size(46.dp).background(color = if (script.isRunning) script.themeColor.copy(alpha = pulseAlpha) else Color.Transparent, shape = RoundedCornerShape(14.dp)).padding(4.dp), contentAlignment = Alignment.Center) {
-                    Box(modifier = Modifier.fillMaxSize().background(script.themeColor.copy(alpha = 0.15f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                        Icon(imageVector = if (script.isFolder) Icons.Default.Folder else Icons.Default.Terminal, contentDescription = null, tint = script.themeColor, modifier = Modifier.size(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(46.dp)
+                        .background(
+                            color = if (script.isRunning) themeColor.copy(alpha = pulseAlpha) else Color.Transparent,
+                            shape = RoundedCornerShape(14.dp)
+                        )
+                        .padding(4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(themeColor.copy(alpha = 0.15f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (script.isFolder) Icons.Default.Folder else Icons.Default.Terminal,
+                            contentDescription = null,
+                            tint = themeColor,
+                            modifier = Modifier.size(20.dp)
+                        )
                     }
                 }
+
                 Spacer(modifier = Modifier.width(14.dp))
+
                 Column(modifier = Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(text = script.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Box(modifier = Modifier.background(script.themeColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
-                            Text(script.type, style = MaterialTheme.typography.labelSmall, color = script.themeColor, fontWeight = FontWeight.Bold)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = script.name,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Box(modifier = Modifier.background(themeColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                            Text(
+                                script.type,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = themeColor,
+                                fontWeight = FontWeight.Bold
+                            )
                         }
-                        if (script.isRunning) Box(modifier = Modifier.size(6.dp).background(Color(0xFF22C55E), RoundedCornerShape(50)))
+                        if (script.isRunning) {
+                            Box(modifier = Modifier.size(6.dp).background(Color(0xFF22C55E), RoundedCornerShape(50)))
+                        }
                     }
+
                     if (script.isFolder) {
-                        Text(text = "入口文件 ➔ ${script.entryPoint}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f), modifier = Modifier.padding(top = 2.dp))
+                        Text(
+                            text = "入口文件 ➔ ${script.entryPoint}",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
                     }
+
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = script.trigger, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
-                    Text(text = script.lastRun, style = MaterialTheme.typography.bodySmall, color = lastRunColor)
+                    Text(
+                        text = script.trigger,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                    )
+                    Text(
+                        text = script.lastRun,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = lastRunColor
+                    )
                 }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    FilledIconButton(onClick = onExecuteNow, enabled = isExecutable, colors = IconButtonDefaults.filledIconButtonColors(containerColor = script.themeColor.copy(alpha = 0.1f), contentColor = script.themeColor, disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)), modifier = Modifier.size(36.dp), shape = RoundedCornerShape(10.dp)) {
+                    FilledIconButton(
+                        onClick = onExecuteNow,
+                        enabled = !script.isRunning,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = themeColor.copy(alpha = 0.1f),
+                            contentColor = themeColor,
+                            disabledContainerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                            disabledContentColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
+                        ),
+                        modifier = Modifier.size(36.dp),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
                         Icon(imageVector = Icons.Default.PlayArrow, contentDescription = "立即执行", modifier = Modifier.size(18.dp))
                     }
+
                     Box {
-                        IconButton(onClick = { showMoreMenu = true }) { Icon(Icons.Default.MoreVert, contentDescription = "更多操作", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)) }
+                        IconButton(onClick = { showMoreMenu = true }) {
+                            Icon(
+                                Icons.Default.MoreVert,
+                                contentDescription = "更多操作",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
                         DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
-                            DropdownMenuItem(text = { Text("查看日志") }, leadingIcon = { Icon(Icons.Default.History, contentDescription = null) }, onClick = { showMoreMenu = false; onViewLogs() })
-                            DropdownMenuItem(text = { Text("复制副本") }, leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) }, onClick = { showMoreMenu = false; onDuplicate() })
+                            DropdownMenuItem(
+                                text = { Text("查看/编辑代码") },
+                                leadingIcon = { Icon(Icons.Default.Terminal, contentDescription = null) },
+                                onClick = { showMoreMenu = false; onOpenDetail() }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("查看日志记录") },
+                                leadingIcon = { Icon(Icons.Default.History, contentDescription = null) },
+                                onClick = { showMoreMenu = false; onViewLogs() }
+                            )
                             HorizontalDivider()
-                            DropdownMenuItem(text = { Text("删除脚本", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }, onClick = { showMoreMenu = false; onDeleteRequest() })
+                            DropdownMenuItem(
+                                text = { Text("删除脚本", color = MaterialTheme.colorScheme.error) },
+                                leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                                onClick = { showMoreMenu = false; onDeleteRequest() }
+                            )
                         }
                     }
                 }
             }
-            AnimatedVisibility(visible = script.isFolder && script.dependencyStatus != DependencyStatus.None) {
+
+            AnimatedVisibility(visible = script.isFolder && dependencyStatusEnum != DependencyStatus.None) {
                 Column {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val (statusText, statusColor) = when {
-                                script.isInstalling -> "正在安装依赖环境…" to MaterialTheme.colorScheme.tertiary
-                                script.dependencyStatus == DependencyStatus.Configured -> "检测到未安装依赖环境" to MaterialTheme.colorScheme.tertiary
-                                script.dependencyStatus == DependencyStatus.Installed -> "依赖环境已完全就绪" to Color(0xFF22C55E)
-                                script.dependencyStatus == DependencyStatus.Error -> "依赖配置失败，环境异常" to MaterialTheme.colorScheme.error
-                                else -> "" to Color.Unspecified
-                            }
-                            Box(modifier = Modifier.size(6.dp).background(statusColor, RoundedCornerShape(50)))
-                            Text(text = statusText, style = MaterialTheme.typography.labelSmall, color = statusColor, fontWeight = FontWeight.SemiBold)
-                        }
-                        if (script.dependencyStatus == DependencyStatus.Configured || script.dependencyStatus == DependencyStatus.Error) {
-                            Button(onClick = onInstallDependencies, enabled = !script.isInstalling, contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp), shape = RoundedCornerShape(8.dp), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary), modifier = Modifier.height(28.dp)) {
-                                if (script.isInstalling) {
-                                    CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onSecondary)
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("安装中...", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                } else {
-                                    Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(12.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("一键安装", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        } else {
-                            TextButton(onClick = onViewLogs, modifier = Modifier.height(28.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
-                                Text("目录详情", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-private fun Modifier.expressiveClickable(onClick: () -> Unit): Modifier = composed {
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(targetValue = if (pressed) 0.97f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "cardPressScale")
-    this.graphicsLayer { scaleX = scale; scaleY = scale }.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
-}
+                            val (statusText, statusColor) = when (dependencyStatusEnum) {
+                                DependencyStatus.Configured -> "检测到未安装依赖环境" to MaterialTheme.colorScheme.tertiary
+                                DependencyStatus.Installed -> "依赖环境已完全就绪" to Color(0xFF22C55E)
+                                DependencyStatus.Error -> "依赖配置失败，环境异常" to MaterialTheme.colorScheme.erro
