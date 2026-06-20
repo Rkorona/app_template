@@ -18,32 +18,25 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.util.UUID
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.myapplication.data.DependencyEntity
+import com.example.myapplication.viewmodel.ConfigViewModel
 
+// 枚举保留，用于数据库类型映射
 enum class DepType { NodeJS, Python3, Linux }
 enum class DepStatus { Installed, Installing, Failed }
 
-data class DependencyItem(
-    val id: String = UUID.randomUUID().toString(),
-    val name: String,
-    val type: DepType,
-    val status: DepStatus,
-    val version: String = "latest"
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DependencyManagerScreen(contentPadding: PaddingValues = PaddingValues()) {
+fun DependencyManagerScreen(
+    contentPadding: PaddingValues = PaddingValues(),
+    viewModel: ConfigViewModel = viewModel() // 👈 注入 ViewModel
+) {
     var selectedTab by remember { mutableStateOf(DepType.NodeJS) }
     
-    val deps = remember {
-        mutableStateListOf(
-            DependencyItem(name = "puppeteer", type = DepType.NodeJS, status = DepStatus.Installed, version = "19.7.2"),
-            DependencyItem(name = "axios", type = DepType.NodeJS, status = DepStatus.Installing),
-            DependencyItem(name = "requests", type = DepType.Python3, status = DepStatus.Installed),
-            DependencyItem(name = "git", type = DepType.Linux, status = DepStatus.Installed)
-        )
-    }
+    // 💡 核心魔法：直接监听数据库中的依赖流
+    val deps by viewModel.depsList.collectAsStateWithLifecycle()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding())) {
@@ -73,18 +66,36 @@ fun DependencyManagerScreen(contentPadding: PaddingValues = PaddingValues()) {
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(deps.filter { it.type == selectedTab }) { dep ->
-                    DependencyCard(dep)
+                // 根据当前选中的 Tab 过滤数据库数据
+                val filteredDeps = deps.filter { it.type == selectedTab }
+                
+                items(filteredDeps, key = { it.id }) { dep ->
+                    DependencyCard(
+                        dep = dep,
+                        onDelete = { viewModel.deleteDependency(dep) } // 👈 触发数据库删除
+                    )
                 }
             }
         }
 
         ExtendedFloatingActionButton(
-            onClick = { /* TODO */ },
+            onClick = { 
+                // 🛠 测试：往数据库插入一条新依赖，当前是在哪个Tab下，就插入哪个类型的依赖
+                viewModel.addDependency(
+                    DependencyEntity(
+                        name = "pkg_${System.currentTimeMillis().toString().takeLast(4)}",
+                        type = selectedTab,
+                        status = DepStatus.Installing // 默认插入为正在安装状态
+                    )
+                )
+            },
             containerColor = MaterialTheme.colorScheme.primary,
             contentColor = MaterialTheme.colorScheme.onPrimary,
             shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).padding(bottom = contentPadding.calculateBottomPadding())
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .padding(bottom = contentPadding.calculateBottomPadding())
         ) {
             Icon(Icons.Default.Build, contentDescription = null)
             Spacer(Modifier.width(8.dp))
@@ -94,17 +105,26 @@ fun DependencyManagerScreen(contentPadding: PaddingValues = PaddingValues()) {
 }
 
 @Composable
-private fun DependencyCard(dep: DependencyItem) {
+private fun DependencyCard(
+    dep: DependencyEntity,
+    onDelete: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
     Card(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier.size(48.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -134,6 +154,31 @@ private fun DependencyCard(dep: DependencyItem) {
                     }
                     Spacer(Modifier.width(4.dp))
                     Text(text, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = color)
+                }
+            }
+
+            Spacer(Modifier.width(8.dp))
+
+            // 更多操作下拉菜单
+            Box {
+                IconButton(onClick = { expanded = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "更多选项", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("重新安装") },
+                        leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                        onClick = { expanded = false /* TODO */ }
+                    )
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text = { Text("移除依赖", color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                        onClick = { 
+                            expanded = false
+                            onDelete() 
+                        }
+                    )
                 }
             }
         }

@@ -1,6 +1,10 @@
 // app_template/app/src/main/java/com/example/myapplication/ui/screens/EnvVarManagerScreen.kt
 package com.example.myapplication.ui.screens
 
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.myapplication.viewmodel.ConfigViewModel
+import com.example.myapplication.data.EnvVarEntity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -36,18 +40,15 @@ data class EnvVar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun EnvVarManagerScreen(contentPadding: PaddingValues = PaddingValues()) {
+fun EnvVarManagerScreen(
+    contentPadding: PaddingValues = PaddingValues(),
+    viewModel: ConfigViewModel = viewModel()
+) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
-    
-    val envVars = remember {
-        mutableStateListOf(
-            EnvVar(name = "TG_BOT_TOKEN", value = "7868495765:AAHPKgFmtqJ...", remarks = "Telegram 机器人凭证"),
-            EnvVar(name = "JD_COOKIE", value = "pt_key=app_openaa;pt_pin=jd_xxx;", remarks = "主账号"),
-            EnvVar(name = "NOTIFY_SKIP_LIST", value = "api_test&daily_check", remarks = "免打扰名单", isEnabled = false)
-        )
-    }
-
+    val envVars by viewModel.envVarsList.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.insertMockDataIfNeeded() }
+        
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding() + 8.dp)
@@ -75,15 +76,21 @@ fun EnvVarManagerScreen(contentPadding: PaddingValues = PaddingValues()) {
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 120.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                items(envVars.filter { it.name.contains(searchQuery, true) || it.remarks.contains(searchQuery, true) }) { env ->
+                val filteredList = envVars.filter { 
+                    it.name.contains(searchQuery, true) || it.remarks.contains(searchQuery, true) 
+                }
+                
+                items(filteredList, key = { it.id }) { env ->
                     EnvVarCard(
                         env = env,
-                        onToggle = { isChecked -> envVars[envVars.indexOf(env)] = env.copy(isEnabled = isChecked) },
+                        // 触发 ViewModel 去更新数据库，更新完 Compose 会自动刷 UI
+                        onToggle = { isChecked -> viewModel.toggleEnvState(env, isChecked) },
                         onCopy = {
                             (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager)
                                 .setPrimaryClip(ClipData.newPlainText("EnvValue", env.value))
                             Toast.makeText(context, "已复制 ${env.name}", Toast.LENGTH_SHORT).show()
                         }
+                        onDelete = { viewModel.deleteEnv(env) }
                     )
                 }
             }
@@ -91,7 +98,11 @@ fun EnvVarManagerScreen(contentPadding: PaddingValues = PaddingValues()) {
 
         // 悬浮按钮 - 位于右下角
         ExtendedFloatingActionButton(
-            onClick = { /* TODO */ },
+            onClick = {
+                viewModel.addOrUpdateEnv(
+                    EnvVarEntity(name = "NEW_VAR_${System.currentTimeMillis().toString().takeLast(4)}", value = "auto_generated")
+                )
+            },
             containerColor = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             shape = RoundedCornerShape(20.dp),
@@ -105,7 +116,7 @@ fun EnvVarManagerScreen(contentPadding: PaddingValues = PaddingValues()) {
 }
 
 @Composable
-private fun EnvVarCard(env: EnvVar, onToggle: (Boolean) -> Unit, onCopy: () -> Unit) {
+private fun EnvVarCard(env: EnvVarEntity, onToggle: (Boolean) -> Unit, onCopy: () -> Unit, onDelete: () -> Unit = {}) {
     Card(
         shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
