@@ -2,6 +2,7 @@
 
 package com.example.myapplication.ui.screens
 
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.*
 import androidx.compose.animation.expandHorizontally
@@ -359,16 +360,16 @@ fun ScriptManagerScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it.trim() },
+                        value = folderName,
+                        onValueChange = { folderName = it.trim() },
                         label = { Text("工程文件夹名称") },
                         placeholder = { Text("例如: auto_task_hub") },
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp)
                     )
                     OutlinedTextField(
-                        value = selectedScript, // 临时在此重用 selectedScript 作为入口文件输入
-                        onValueChange = { selectedScript = it.trim() },
+                        value = folderEntryPoint, // 临时在此重用 selectedScript 作为入口文件输入
+                        onValueChange = { folderEntryPoint = it.trim() },
                         label = { Text("配置入口执行文件名") },
                         placeholder = { Text("例如: main.py 或 index.js") },
                         singleLine = true,
@@ -377,17 +378,12 @@ fun ScriptManagerScreen(
                 }
             },
             confirmButton = {
-                val isValid = name.isNotBlank() && selectedScript.isNotBlank()
+                val isValid = folderName.isNotBlank() && folderEntryPoint.isNotBlank()
                 Button(
                     onClick = {
-                        viewModel.addOrUpdateDependency( // 💡 我们这里直接调用通用保存方法保存项目实体
-                            // 我们可以在 ViewModel 里增加 addScript 行为，或者由于 ConfigViewModel 是专门处理 Env/Deps 的，
-                            // 我们可以临时借助一个通用的机制把数据插进去。不过在当前状态下，我们可以用 viewModel 的数据库框架，
-                            // 或者直接借助 Termux 环境来创建。为了配合 UI，我们可以临时向 scripts 集合插入这个项目，
-                            // 并在下一阶段正式存盘。
-                            /* 这里在下一阶段接入真实的 ScriptViewModel，此处先跑通 UI 闭环 */
-                            showFolderDialog = false
-                        )
+                        // 👈 调用真实的物理文件夹工程创建方法
+                        viewModel.createProjectFolder(folderName, folderEntryPoint)
+                        showFolderDialog = false
                     },
                     enabled = isValid
                 ) {

@@ -130,7 +130,10 @@ fun MainScreen() {
     Scaffold(
         topBar = {
             if (currentRoute != "ScriptEditor") {
-                ExpressiveTopAppBar(titleText = titleText)
+                ExpressiveTopAppBar(
+                    titleText = titleText,
+                    scrollBehavior = scrollBehavior
+                )
             }
         },
         bottomBar = {
