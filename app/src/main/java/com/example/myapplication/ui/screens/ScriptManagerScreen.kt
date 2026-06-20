@@ -650,4 +650,22 @@ fun ScriptCard(
                             val (statusText, statusColor) = when (dependencyStatusEnum) {
                                 DependencyStatus.Configured -> "检测到未安装依赖环境" to MaterialTheme.colorScheme.tertiary
                                 DependencyStatus.Installed -> "依赖环境已完全就绪" to Color(0xFF22C55E)
-                                DependencyStatus.Error -> "依赖配置失败，环境异常" to MaterialTheme.colorScheme.erro
+                                DependencyStatus.Error -> "依赖配置失败，环境异常" to MaterialTheme.colorScheme.error
+                                else -> "" to Color.Unspecified
+                            }
+                            Box(modifier = Modifier.size(6.dp).background(statusColor, RoundedCornerShape(50)))
+                            Text(text = statusText, style = MaterialTheme.typography.labelSmall, color = statusColor, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun Modifier.expressiveClickable(onClick: () -> Unit): Modifier = composed {
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(targetValue = if (pressed) 0.97f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow), label = "cardPressScale")
+    this.graphicsLayer { scaleX = scale; scaleY = scale }.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+}

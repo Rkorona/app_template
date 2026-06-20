@@ -18,7 +18,7 @@ class Converters {
     fun toDepStatus(value: String): DepStatus = enumValueOf(value)
 }
 
-@Database(entities = [EnvVarEntity::class, DependencyEntity::class], ScriptEntity::class], version = 1, exportSchema = false)
+@Database(entities = [EnvVarEntity::class, DependencyEntity::class, ScriptEntity::class], version = 1, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun envVarDao(): EnvVarDao

@@ -1,6 +1,7 @@
 // app_template/app/src/main/java/com/example/myapplication/ui/screens/MainScreen.kt
 package com.example.myapplication.ui.screens
 
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
