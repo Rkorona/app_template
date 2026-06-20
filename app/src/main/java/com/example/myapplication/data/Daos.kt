@@ -38,7 +38,10 @@ interface DependencyDao {
 interface ScriptDao {
     @Query("SELECT * FROM scripts")
     fun getAll(): Flow<List<ScriptEntity>>
-
+    
+    @Query("SELECT * FROM scripts")
+    suspend fun getAllOnce(): List<ScriptEntity>
+    
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(script: ScriptEntity)
 

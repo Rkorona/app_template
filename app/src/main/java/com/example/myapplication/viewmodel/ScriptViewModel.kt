@@ -1,3 +1,4 @@
+// app_template/app/src/main/java/com/example/myapplication/viewmodel/ScriptViewModel.kt
 package com.example.myapplication.viewmodel
 
 import android.app.Application
@@ -7,8 +8,9 @@ import com.example.myapplication.data.AppDatabase
 import com.example.myapplication.data.ScriptEntity
 import com.example.myapplication.utils.FileHelper
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -16,23 +18,23 @@ class ScriptViewModel(application: Application) : AndroidViewModel(application) 
     private val db = AppDatabase.getDatabase(application)
     private val dao = db.scriptDao()
 
-    private val _scriptsList = MutableStateFlow<List<ScriptEntity>>(emptyList())
-    val scriptsList: StateFlow<List<ScriptEntity>> = _scriptsList
+    // 💡 1. 极其优雅的单轨只读观察流，由 Room 框架原生驱动实时更新，绝不发生冲突
+    val scriptsList: StateFlow<List<ScriptEntity>> = dao.getAll()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
     init {
         syncFilesWithDatabase()
     }
 
     /**
-     * 核心双轨同步：物理文件夹 <==> 数据库
+     * 💡 2. 单次物理对齐：不再做 endless collect，防止新文件被旧协程“秒删”
      */
     fun syncFilesWithDatabase() {
         viewModelScope.launch(Dispatchers.IO) {
-            // 1. 初始化并扫描 /sdcard/QLPanel/scripts
             FileHelper.initDirectories()
             val physicalItems = FileHelper.scanPhysicalScripts()
 
-            // 2. 补全数据库中缺失的物理文件记录
+            // 2.1 补全数据库中缺失的物理文件记录
             for (pItem in physicalItems) {
                 val dbItem = dao.getByName(pItem.name)
                 if (dbItem == null) {
@@ -60,17 +62,13 @@ class ScriptViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
 
-            // 3. 从数据库中清理掉已经在物理磁盘上被删除的记录
-            dao.getAll().collect { dbList ->
-                val physicalNames = physicalItems.map { it.name }.toSet()
-                for (dbItem in dbList) {
-                    if (!physicalNames.contains(dbItem.name)) {
-                        dao.delete(dbItem)
-                    }
+            // 2.2 一次性读出数据库，清理已被物理删除的无效记录
+            val dbList = dao.getAllOnce() // 👈 使用一次性挂起查询
+            val physicalNames = physicalItems.map { it.name }.toSet()
+            for (dbItem in dbList) {
+                if (!physicalNames.contains(dbItem.name)) {
+                    dao.delete(dbItem)
                 }
-                
-                // 4. 将最新最干净的数据同步到 UI 的 MutableStateFlow 中
-                _scriptsList.value = dbList
             }
         }
     }

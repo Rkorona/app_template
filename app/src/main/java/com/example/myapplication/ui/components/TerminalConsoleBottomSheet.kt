@@ -77,7 +77,10 @@ fun TerminalConsoleBottomSheet(
             var serverSocket: ServerSocket? = null
             try {
                 // 监听本地 9090 端口
-                serverSocket = ServerSocket(9090)
+                serverSocket = ServerSocket().apply {
+                    reuseAddress = true
+                    bind(java.net.InetSocketAddress(9090))
+                }
                 
                 // 给 Termux 下发执行指令，并将输出重定向回到本地 9090 端口
                 TermuxRunner.executeScript(
@@ -88,6 +91,7 @@ fun TerminalConsoleBottomSheet(
                     scriptType = scriptEntity.type,
                     socketPort = 9090
                 )
+                
 
                 logs.add(LogLine("[EXEC] 调度指令已派发至 Termux 引擎，等待物理管道连通...", Color(0xFFA855F7)))
 
