@@ -1,3 +1,5 @@
+// app_template/app/src/main/java/com/example/myapplication/ui/components/CustomNavigationBar.kt
+
 package com.example.myapplication.ui.components
 
 import androidx.compose.animation.core.Animatable
@@ -10,7 +12,6 @@ import androidx.compose.material.icons.filled.Alarm
 import androidx.compose.material.icons.filled.Code 
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,33 +47,31 @@ fun ExpressiveNavigationBar(
             icon = { AnimatedHomeIcon(selected = currentRoute == "Dashboard") }
         )
 
-        // 2. 脚本管理 (向上顶一下的果冻动画)
-        // 2. 脚本管理 (全新换装：代码括号与敲击跃动动画)
+        // 2. 脚本管理 (代码括号与敲击跃动动画)
         NavigationBarItem(
             selected = currentRoute == "ScriptManager",
             onClick = { onNavigate("ScriptManager") },
             alwaysShowLabel = false,
-            label = { Text("脚本管理") },
-            icon = { AnimatedCodeIcon(selected = currentRoute == "ScriptManager") } // 👈 换成专用的代码图标动效
+            label = { Text("脚本") },
+            icon = { AnimatedCodeIcon(selected = currentRoute == "ScriptManager") }
         )
-          
 
-        // ✨ 3. 定时任务 (核心新增：左右疯狂摇摆的小闹钟)
+        // 3. 定时任务 (摇摆的小闹钟)
         NavigationBarItem(
             selected = currentRoute == "ScheduledTasks",
             onClick = { onNavigate("ScheduledTasks") },
             alwaysShowLabel = false,
-            label = { Text("定时任务") },
+            label = { Text("定时") },
             icon = { AnimatedAlarmIcon(selected = currentRoute == "ScheduledTasks") }
         )
 
-        // 4. 设置 (炫酷齿轮旋转一圈)
+        // 4. 配置中心 (炫酷齿轮旋转一圈) -> 路由改为大写 Settings，标签改为"配置"
         NavigationBarItem(
-            selected = currentRoute == "settings",
-            onClick = { onNavigate("settings") },
+            selected = currentRoute == "Settings",
+            onClick = { onNavigate("Settings") },
             alwaysShowLabel = false,
-            label = { Text("设置") },
-            icon = { AnimatedSettingsIcon(selected = currentRoute == "settings") }
+            label = { Text("配置") },
+            icon = { AnimatedSettingsIcon(selected = currentRoute == "Settings") }
         )
     }
 }
@@ -80,7 +79,7 @@ fun ExpressiveNavigationBar(
 // ==================== 🛠️ 图标微动效组件库 ====================
 
 /**
- * ✨ 新增闹钟图标：被选中时高频左右晃动模拟“闹钟打铃”，随后弹性复位
+ * ✨ 闹钟图标：被选中时高频左右晃动模拟“闹钟打铃”，随后弹性复位
  */
 @Composable
 fun AnimatedAlarmIcon(selected: Boolean) {
@@ -88,9 +87,7 @@ fun AnimatedAlarmIcon(selected: Boolean) {
 
     LaunchedEffect(selected) {
         if (selected) {
-            rotation.snapTo(0f) // 重置角度
-            
-            // 快速左右微调抖动，模拟机械打铃质感
+            rotation.snapTo(0f) 
             val duration = 50
             rotation.animateTo(18f, animationSpec = tween(durationMillis = duration))
             rotation.animateTo(-18f, animationSpec = tween(durationMillis = duration))
@@ -99,7 +96,6 @@ fun AnimatedAlarmIcon(selected: Boolean) {
             rotation.animateTo(10f, animationSpec = tween(durationMillis = duration))
             rotation.animateTo(-10f, animationSpec = tween(durationMillis = duration))
             
-            // 最终通过中度Q弹动画回归C位
             rotation.animateTo(
                 targetValue = 0f,
                 animationSpec = spring(
@@ -118,7 +114,7 @@ fun AnimatedAlarmIcon(selected: Boolean) {
 }
 
 /**
- * 设置图标：被选中时旋转一圈，并带有弹性回弹
+ * ⚙️ 配置图标（原设置）：被选中时旋转一圈，并带有弹性回弹
  */
 @Composable
 fun AnimatedSettingsIcon(selected: Boolean) {
@@ -128,10 +124,10 @@ fun AnimatedSettingsIcon(selected: Boolean) {
         if (selected) {
             rotation.snapTo(0f) // 先重置角度
             rotation.animateTo(
-                targetValue = 360f,
+                targetValue = 180f, // 齿轮转半圈/一圈视觉效果最好，180度配合Spring回弹有极佳的机械阻尼感
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
+                    stiffness = Spring.StiffnessLow
                 )
             )
         }
@@ -145,7 +141,7 @@ fun AnimatedSettingsIcon(selected: Boolean) {
 }
 
 /**
- * 主页图标：被选中时先放大再缩回
+ * 🏠 主页图标：被选中时先放大再缩回
  */
 @Composable
 fun AnimatedHomeIcon(selected: Boolean) {
@@ -170,7 +166,7 @@ fun AnimatedHomeIcon(selected: Boolean) {
 }
 
 /**
- * 个人图标：被选中时向上弹跳一下
+ * 💻 脚本代码图标：被选中时轻微放大并摇摆
  */
 @Composable
 fun AnimatedCodeIcon(selected: Boolean) {
@@ -179,7 +175,6 @@ fun AnimatedCodeIcon(selected: Boolean) {
 
     LaunchedEffect(selected) {
         if (selected) {
-            // 利用协程作用域让“缩放”和“旋转”两个动画完美并行，交织出极佳的灵动感
             launch {
                 scale.snapTo(1f)
                 scale.animateTo(1.28f, animationSpec = tween(durationMillis = 100))
@@ -188,10 +183,8 @@ fun AnimatedCodeIcon(selected: Boolean) {
                     animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
                 )
             }
-            
             launch {
                 rotation.snapTo(0f)
-                // 模拟代码敲击的左右轻微侧摆
                 rotation.animateTo(-14f, animationSpec = tween(durationMillis = 60))
                 rotation.animateTo(14f, animationSpec = tween(durationMillis = 60))
                 rotation.animateTo(
@@ -206,7 +199,7 @@ fun AnimatedCodeIcon(selected: Boolean) {
     }
 
     Icon(
-        imageVector = Icons.Filled.Code, // 👈 正统代码符号
+        imageVector = Icons.Filled.Code,
         contentDescription = "ScriptManager",
         modifier = Modifier.graphicsLayer(
             scaleX = scale.value,
