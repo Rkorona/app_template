@@ -30,7 +30,8 @@ import com.example.myapplication.utils.FileHelper
 fun MainScreen() {
     val context = LocalContext.current
     var currentRoute by remember { mutableStateOf("Dashboard") }
-    
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+
     // ─── 权限阻断状态 ───
     var hasFilePermission by remember { mutableStateOf(true) }
     
@@ -133,6 +134,7 @@ fun MainScreen() {
                 ExpressiveTopAppBar(
                     titleText = titleText,
                     scrollBehavior = scrollBehavior
+                    
                 )
             }
         },
