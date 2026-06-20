@@ -1,3 +1,5 @@
+// app_template/app/src/main/java/com/example/myapplication/ui/components/TerminalConsoleBottomSheet.kt
+
 package com.example.myapplication.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState

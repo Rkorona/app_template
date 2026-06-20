@@ -1,4 +1,5 @@
 // app_template/app/src/main/java/com/example/myapplication/ui/screens/DashboardScreen.kt
+
 package com.example.myapplication.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility

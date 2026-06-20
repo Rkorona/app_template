@@ -1,3 +1,5 @@
+// app_template/app/src/main/java/com/example/myapplication/ui/screens/ScriptManagerScreen.kt
+
 package com.example.myapplication.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
