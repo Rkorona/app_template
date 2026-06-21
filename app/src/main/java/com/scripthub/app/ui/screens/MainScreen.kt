@@ -1,4 +1,3 @@
-// app_template/app/src/main/java/com/example/myapplication/ui/screens/MainScreen.kt
 package com.scripthub.app.ui.screens
 
 import kotlinx.coroutines.Dispatchers
@@ -32,12 +31,14 @@ import com.scripthub.app.ui.components.ExpressiveNavigationBar
 import com.scripthub.app.ui.components.ExpressiveTopAppBar
 import com.scripthub.app.ui.components.GlobalLogBottomSheet
 import com.scripthub.app.utils.CronNextRunCalculator
+import com.scripthub.app.utils.DistroPreference
 import com.scripthub.app.utils.FileHelper
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
@@ -46,13 +47,15 @@ fun MainScreen() {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val scope = rememberCoroutineScope()
 
+    // ─── 首次启动：检查 proot 环境是否已就绪 ───
+    var needsSetup by remember { mutableStateOf(!DistroPreference.isSetupDone(context)) }
+
     // ─── 数据库订阅（为仪表盘提供实时数据）───
     val db = remember { AppDatabase.getDatabase(context) }
     val dbScripts  by db.scriptDao().getAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val dbTasks    by db.scheduledTaskDao().getAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val recentLogs by db.runLogDao().getAllRecent().collectAsStateWithLifecycle(initialValue = emptyList())
 
-    // 每天零点的时间戳（用于统计"今日触发"）
     val startOfDayMs = remember {
         Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
@@ -62,7 +65,6 @@ fun MainScreen() {
     val triggeredToday by db.runLogDao().countTodayFlow(startOfDayMs)
         .collectAsStateWithLifecycle(initialValue = 0)
 
-    // 每分钟 tick 一次，驱动"下次执行"时间实时更新
     var tickMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -76,30 +78,24 @@ fun MainScreen() {
     val dashboardState by remember(dbScripts, dbTasks, recentLogs, triggeredToday, tickMs) {
         derivedStateOf {
             val enabledTasks = dbTasks.filter { it.isEnabled }
-            // 实时计算最早下次执行时间（不依赖 DB 中的旧字符串）
             val nextTask = enabledTasks
                 .filter { it.cronExpression.trim().split(Regex("\\s+")).size == 5 }
                 .minByOrNull { CronNextRunCalculator.nextRunMillis(it.cronExpression) }
             val nextRun = if (nextTask != null) {
                 val ms = CronNextRunCalculator.nextRunMillis(nextTask.cronExpression)
-                NextRun(
-                    time       = timeFmt.format(Date(ms)),
-                    scriptName = nextTask.name
-                )
+                NextRun(time = timeFmt.format(Date(ms)), scriptName = nextTask.name)
             } else {
                 NextRun("--:--", "暂无调度任务")
             }
 
-            // 将 RunLogEntity 转换为 LogEntry 列表（最近5条）
             val logEntries = recentLogs.take(5).map { log ->
                 val status = when {
-                    log.exitCode == 0    -> LogStatus.SUCCESS
-                    log.exitCode == -1   -> LogStatus.RUNNING
-                    else                 -> LogStatus.FAILED
+                    log.exitCode == 0  -> LogStatus.SUCCESS
+                    log.exitCode == -1 -> LogStatus.RUNNING
+                    else               -> LogStatus.FAILED
                 }
-                val timeStr = timeFmt.format(Date(log.startTime))
                 LogEntry(
-                    time       = timeStr,
+                    time       = timeFmt.format(Date(log.startTime)),
                     scriptName = log.scriptName,
                     message    = if (log.exitCode == 0) "执行成功" else if (log.exitCode == -1) "未知退出" else "退出码 ${log.exitCode}",
                     status     = status
@@ -107,57 +103,61 @@ fun MainScreen() {
             }
 
             DashboardUiState(
-                serviceRunning  = true,
-                uptimeLabel     = "服务运行中",
-                totalScripts    = dbScripts.size,
-                triggeredToday  = triggeredToday,
-                nextRun         = nextRun,
-                recentLogs      = logEntries
+                serviceRunning = true,
+                uptimeLabel    = "服务运行中",
+                totalScripts   = dbScripts.size,
+                triggeredToday = triggeredToday,
+                nextRun        = nextRun,
+                recentLogs     = logEntries
             )
         }
     }
 
-    // ─── 权限阻断状态 ───
     var hasFilePermission by remember { mutableStateOf(true) }
-    
-    // ─── 传递给编辑器的临时状态 ───
-    var editingFileName by remember { mutableStateOf("") }
-    var editingIsFolder by remember { mutableStateOf(false) }
+    var editingFileName   by remember { mutableStateOf("") }
+    var editingIsFolder   by remember { mutableStateOf(false) }
     var editingEntryPoint by remember { mutableStateOf("") }
+    var showGlobalLog     by remember { mutableStateOf(false) }
 
-    // ─── 全局日志面板 ───
-    var showGlobalLog by remember { mutableStateOf(false) }
-
-    // 检查并请求 MANAGE_EXTERNAL_STORAGE 权限
     fun checkPermission() {
         hasFilePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Environment.isExternalStorageManager()
         } else {
-            true // 旧版本默认系统控制
+            true
         }
         if (hasFilePermission) {
-            // 权限通过，顺便初始化物理目录结构
-            
-            scope.launch(Dispatchers.IO) {
-                FileHelper.initDirectories()
-            }
+            scope.launch(Dispatchers.IO) { FileHelper.initDirectories() }
         }
     }
 
-    LaunchedEffect(Unit) {
-        checkPermission()
+    LaunchedEffect(Unit) { checkPermission() }
+
+    val navigateTo: (String) -> Unit = { newRoute -> currentRoute = newRoute }
+
+    BackHandler(
+        enabled = currentRoute == "ScriptEditor" ||
+                  currentRoute == "EnvVars"       ||
+                  currentRoute == "Dependencies"  ||
+                  currentRoute == "LinuxEnv"
+    ) {
+        currentRoute = when (currentRoute) {
+            "ScriptEditor" -> "ScriptManager"
+            else           -> "Settings"
+        }
     }
 
-    val navigateTo: (String) -> Unit = { newRoute ->
-        currentRoute = newRoute
+    // ─── 首次启动安装向导（覆盖整个 UI）───
+    if (needsSetup) {
+        Scaffold { innerPadding ->
+            EnvironmentSetupScreen(
+                contentPadding = innerPadding,
+                onSetupComplete = { needsSetup = false }
+            )
+        }
+        return
     }
 
-    // 页面拦截返回逻辑
-    BackHandler(enabled = currentRoute == "ScriptEditor" || currentRoute == "EnvVars" || currentRoute == "Dependencies") {
-        currentRoute = if (currentRoute == "ScriptEditor") "ScriptManager" else "Settings"
-    }
-
-    // ─── 权限拦截 UI ───
+    // ─── 存储权限拦截 UI ───
     if (!hasFilePermission) {
         Scaffold { innerPadding ->
             Column(
@@ -168,19 +168,24 @@ fun MainScreen() {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Box(
-                    modifier = Modifier.size(80.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(60.dp))
-                }
+                Icon(
+                    Icons.Default.Security,
+                    contentDescription = null,
+                    tint     = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(60.dp)
+                )
                 Spacer(modifier = Modifier.height(20.dp))
-                Text("需要共享存储空间访问权限", fontWeight = FontWeight.Black, fontSize = 18.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text(
+                    "需要共享存储空间访问权限",
+                    fontWeight = FontWeight.Black,
+                    fontSize   = 18.sp,
+                    textAlign  = androidx.compose.ui.text.style.TextAlign.Center
+                )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    "本面板采用公共存储（/sdcard/QLPanel）作为核心工作区。我们需要此权限以便和 Termux 执行引擎同步运行依赖和脚本。",
-                    fontSize = 13.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "本面板采用公共存储（/sdcard/QLPanel）作为脚本工作区，proot 执行引擎将通过绑定挂载访问这些文件。",
+                    fontSize  = 13.sp,
+                    color     = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(32.dp))
@@ -194,7 +199,7 @@ fun MainScreen() {
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
+                    shape    = RoundedCornerShape(12.dp)
                 ) {
                     Text("前往设置授予权限", fontWeight = FontWeight.Bold)
                 }
@@ -207,16 +212,17 @@ fun MainScreen() {
         return
     }
 
-    // ─── 正常的 App 主体逻辑 ───
+    // ─── 正常 App 主体 ───
     val titleText = when (currentRoute) {
-        "Dashboard" -> "仪表盘"
-        "ScriptManager" -> "脚本管理"
+        "Dashboard"      -> "仪表盘"
+        "ScriptManager"  -> "脚本管理"
         "ScheduledTasks" -> "定时任务"
-        "Settings" -> "配置中心"
-        "EnvVars" -> "环境变量"
-        "Dependencies" -> "依赖管理"
-        "ScriptEditor" -> "代码编辑"
-        else -> "My Application"
+        "Settings"       -> "配置中心"
+        "EnvVars"        -> "环境变量"
+        "Dependencies"   -> "依赖管理"
+        "ScriptEditor"   -> "代码编辑"
+        "LinuxEnv"       -> "Linux 运行环境"
+        else             -> "ScriptHub"
     }
 
     Scaffold(
@@ -224,7 +230,7 @@ fun MainScreen() {
         topBar = {
             if (currentRoute != "ScriptEditor") {
                 ExpressiveTopAppBar(
-                    titleText = titleText,
+                    titleText     = titleText,
                     scrollBehavior = scrollBehavior,
                     actions = {
                         if (currentRoute == "ScheduledTasks") {
@@ -242,44 +248,42 @@ fun MainScreen() {
         },
         bottomBar = {
             if (currentRoute != "ScriptEditor") {
-                val isSubScreen = currentRoute == "EnvVars" || currentRoute == "Dependencies"
+                val isSubScreen = currentRoute == "EnvVars"     ||
+                                  currentRoute == "Dependencies" ||
+                                  currentRoute == "LinuxEnv"
                 ExpressiveNavigationBar(
                     currentRoute = if (isSubScreen) "Settings" else currentRoute,
-                    onNavigate = navigateTo
+                    onNavigate   = navigateTo
                 )
             }
         }
     ) { innerPadding ->
         Crossfade(targetState = currentRoute, label = "Route Transition") { route ->
             when (route) {
-                "Dashboard" -> DashboardScreen(state = dashboardState, contentPadding = innerPadding)
-                "ScriptManager" -> {
-                    // 我们即将在下一节彻底重构这个页面，接入物理文件系统！
-                    ScriptManagerScreen(
-                        contentPadding = innerPadding,
-                        onOpenDetail = { script ->
-                            // 拦截点击事件，路由直接切到代码编辑器！
-                            editingFileName = script.name
-                            editingIsFolder = script.isFolder
-                            editingEntryPoint = script.entryPoint
-                            navigateTo("ScriptEditor")
-                        }
-                    )
-                }
+                "Dashboard"      -> DashboardScreen(state = dashboardState, contentPadding = innerPadding)
+                "ScriptManager"  -> ScriptManagerScreen(
+                    contentPadding = innerPadding,
+                    onOpenDetail   = { script ->
+                        editingFileName   = script.name
+                        editingIsFolder   = script.isFolder
+                        editingEntryPoint = script.entryPoint
+                        navigateTo("ScriptEditor")
+                    }
+                )
                 "ScheduledTasks" -> ScheduledTaskManagerScreen(contentPadding = innerPadding)
-                "Settings" -> SettingsScreen(contentPadding = innerPadding, onNavigate = navigateTo)
-                "EnvVars" -> EnvVarManagerScreen(contentPadding = innerPadding)
-                "Dependencies" -> DependencyManagerScreen(contentPadding = innerPadding)
-                
-                // 💡 极客编辑器页面
-                "ScriptEditor" -> {
-                    ScriptEditorScreen(
-                        fileName = editingFileName,
-                        isFolder = editingIsFolder,
-                        entryPoint = editingEntryPoint,
-                        onBack = { navigateTo("ScriptManager") }
-                    )
-                }
+                "Settings"       -> SettingsScreen(contentPadding = innerPadding, onNavigate = navigateTo)
+                "EnvVars"        -> EnvVarManagerScreen(contentPadding = innerPadding)
+                "Dependencies"   -> DependencyManagerScreen(contentPadding = innerPadding)
+                "LinuxEnv"       -> EnvironmentSetupScreen(
+                    contentPadding  = innerPadding,
+                    onSetupComplete = { navigateTo("Settings") }
+                )
+                "ScriptEditor"   -> ScriptEditorScreen(
+                    fileName   = editingFileName,
+                    isFolder   = editingIsFolder,
+                    entryPoint = editingEntryPoint,
+                    onBack     = { navigateTo("ScriptManager") }
+                )
             }
         }
     }
