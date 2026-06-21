@@ -141,12 +141,25 @@ fun ScheduledTaskManagerScreen(
     val dbTasks by taskDao.getAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val tasksList = remember(dbTasks) { dbTasks.map { it.toUiModel() } }
 
-    // 对数据库中仍显示"计算中..."的老任务补算下次执行时间
+    // 对数据库中仍显示"计算中..."的老任务补算下次执行时间，并每分钟刷新一次所有已启用任务的下次执行时间
     LaunchedEffect(dbTasks) {
         val stale = dbTasks.filter { it.nextRunTime == "计算中..." }
         if (stale.isNotEmpty()) {
             scope.launch(Dispatchers.IO) {
                 stale.forEach { task ->
+                    val computed = CronNextRunCalculator.nextRunTime(task.cronExpression)
+                    taskDao.update(task.copy(nextRunTime = computed))
+                }
+            }
+        }
+    }
+
+    // 每分钟刷新一次所有已启用任务的"下次执行"时间，避免时间过期后仍显示旧值
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.delay(60_000L)
+            scope.launch(Dispatchers.IO) {
+                dbTasks.filter { it.isEnabled }.forEach { task ->
                     val computed = CronNextRunCalculator.nextRunTime(task.cronExpression)
                     taskDao.update(task.copy(nextRunTime = computed))
                 }
@@ -303,6 +316,8 @@ fun ScheduledTaskManagerScreen(
                     if (saved.initialStatus == CronTaskStatus.Enabled) {
                         TaskSchedulerManager.scheduleTask(context, entity)
                     }
+                    // 更新目标脚本的触发方式为"定时触发"
+                    db.scriptDao().updateTrigger(saved.targetScript, "⏰ 定时触发")
                 }
                 isCreatingNew = false
                 editorTarget = null
@@ -322,6 +337,13 @@ fun ScheduledTaskManagerScreen(
                     scope.launch(Dispatchers.IO) {
                         taskDao.deleteById(task.id)
                         TaskSchedulerManager.cancelTask(context, task.id)
+                        // 若该脚本已无其他定时任务，则恢复为"手动触发"
+                        val remaining = taskDao.getAllOnce().count {
+                            it.id != task.id && it.targetScript == task.targetScript
+                        }
+                        if (remaining == 0) {
+                            db.scriptDao().updateTrigger(task.targetScript, "⚡ 手动触发")
+                        }
                     }
                     pendingDelete = null
                 }) { Text("删除", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }

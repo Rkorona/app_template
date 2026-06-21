@@ -2,6 +2,7 @@
 package com.example.myapplication.ui.screens
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.shape.RoundedCornerShape
 import android.content.Intent
@@ -30,6 +31,10 @@ import com.example.myapplication.ui.components.ExpressiveTopAppBar
 import com.example.myapplication.utils.CronNextRunCalculator
 import com.example.myapplication.utils.FileHelper
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen() {
@@ -40,28 +45,71 @@ fun MainScreen() {
 
     // ─── 数据库订阅（为仪表盘提供实时数据）───
     val db = remember { AppDatabase.getDatabase(context) }
-    val dbScripts by db.scriptDao().getAll().collectAsStateWithLifecycle(initialValue = emptyList())
-    val dbTasks   by db.scheduledTaskDao().getAll().collectAsStateWithLifecycle(initialValue = emptyList())
+    val dbScripts  by db.scriptDao().getAll().collectAsStateWithLifecycle(initialValue = emptyList())
+    val dbTasks    by db.scheduledTaskDao().getAll().collectAsStateWithLifecycle(initialValue = emptyList())
+    val recentLogs by db.runLogDao().getAllRecent().collectAsStateWithLifecycle(initialValue = emptyList())
 
-    val dashboardState by remember(dbScripts, dbTasks) {
+    // 每天零点的时间戳（用于统计"今日触发"）
+    val startOfDayMs = remember {
+        Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    val triggeredToday by db.runLogDao().countTodayFlow(startOfDayMs)
+        .collectAsStateWithLifecycle(initialValue = 0)
+
+    // 每分钟 tick 一次，驱动"下次执行"时间实时更新
+    var tickMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L)
+            tickMs = System.currentTimeMillis()
+        }
+    }
+
+    val timeFmt = remember { SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()) }
+
+    val dashboardState by remember(dbScripts, dbTasks, recentLogs, triggeredToday, tickMs) {
         derivedStateOf {
             val enabledTasks = dbTasks.filter { it.isEnabled }
-            // 找到下次执行时间最早的任务
+            // 实时计算最早下次执行时间（不依赖 DB 中的旧字符串）
             val nextTask = enabledTasks
                 .filter { it.cronExpression.trim().split(Regex("\\s+")).size == 5 }
                 .minByOrNull { CronNextRunCalculator.nextRunMillis(it.cronExpression) }
             val nextRun = if (nextTask != null) {
+                val ms = CronNextRunCalculator.nextRunMillis(nextTask.cronExpression)
                 NextRun(
-                    time = nextTask.nextRunTime.takeIf { it != "计算中..." && it != "计算错误" && it != "表达式无效" }
-                        ?: CronNextRunCalculator.nextRunTime(nextTask.cronExpression),
+                    time       = timeFmt.format(Date(ms)),
                     scriptName = nextTask.name
                 )
             } else {
                 NextRun("--:--", "暂无调度任务")
             }
+
+            // 将 RunLogEntity 转换为 LogEntry 列表（最近5条）
+            val logEntries = recentLogs.take(5).map { log ->
+                val status = when {
+                    log.exitCode == 0    -> LogStatus.SUCCESS
+                    log.exitCode == -1   -> LogStatus.RUNNING
+                    else                 -> LogStatus.FAILED
+                }
+                val timeStr = timeFmt.format(Date(log.startTime))
+                LogEntry(
+                    time       = timeStr,
+                    scriptName = log.scriptName,
+                    message    = if (log.exitCode == 0) "执行成功" else if (log.exitCode == -1) "未知退出" else "退出码 ${log.exitCode}",
+                    status     = status
+                )
+            }
+
             DashboardUiState(
-                totalScripts = dbScripts.size,
-                nextRun = nextRun
+                serviceRunning  = true,
+                uptimeLabel     = "服务运行中",
+                totalScripts    = dbScripts.size,
+                triggeredToday  = triggeredToday,
+                nextRun         = nextRun,
+                recentLogs      = logEntries
             )
         }
     }

@@ -71,6 +71,12 @@ interface RunLogDao {
 
     @Query("DELETE FROM run_logs WHERE scriptName = :scriptName")
     suspend fun deleteForScript(scriptName: String)
+
+    @Query("SELECT COUNT(*) FROM run_logs WHERE startTime >= :startOfDayMs")
+    fun countTodayFlow(startOfDayMs: Long): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM run_logs WHERE startTime >= :startOfDayMs")
+    suspend fun countToday(startOfDayMs: Long): Int
 }
 
 @Dao
@@ -92,4 +98,10 @@ interface ScriptDao {
 
     @Query("DELETE FROM scripts WHERE name = :name")
     suspend fun deleteByName(name: String)
+
+    @Query("UPDATE scripts SET lastRun = :lastRun WHERE name = :name")
+    suspend fun updateLastRun(name: String, lastRun: String)
+
+    @Query("UPDATE scripts SET trigger = :trigger WHERE name = :name")
+    suspend fun updateTrigger(name: String, trigger: String)
 }

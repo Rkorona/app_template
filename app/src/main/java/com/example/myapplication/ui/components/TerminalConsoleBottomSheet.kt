@@ -36,6 +36,9 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.ServerSocket
 import java.net.Socket
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 data class LogLine(val text: String, val color: Color = TerminalSuccess)
 
@@ -174,6 +177,16 @@ fun TerminalConsoleBottomSheet(
                         runLogDao.pruneOldLogs(scriptName)
                     } catch (e: Exception) {
                         // 日志入库失败不影响主流程
+                    }
+
+                    // 更新脚本的最后运行时间（在 ScriptCard 上实时显示）
+                    try {
+                        val fmt = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+                        val label = if (exitCode == 0) "✅ ${fmt.format(Date(startTime))}"
+                                    else "❌ ${fmt.format(Date(startTime))}"
+                        db.scriptDao().updateLastRun(scriptName, label)
+                    } catch (e: Exception) {
+                        // 不影响主流程
                     }
 
                     withContext(Dispatchers.Main) {
