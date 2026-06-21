@@ -42,6 +42,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.myapplication.data.AppDatabase
 import com.example.myapplication.ui.components.TerminalConsoleBottomSheet
 import com.example.myapplication.utils.CronTranslator
 import com.example.myapplication.ui.theme.TypeColorPython
@@ -97,6 +100,14 @@ fun ScheduledTaskManagerScreen(
 ) {
     // 💡 移除所有硬编码，初始状态为空表
     val tasksList = remember { mutableStateListOf<ScheduledTask>() }
+
+    // 从 Room 数据库实时读取脚本列表，与脚本管理页完全联动
+    val context = LocalContext.current
+    val db = remember { AppDatabase.getDatabase(context) }
+    val dbScripts by db.scriptDao().getAll().collectAsStateWithLifecycle(initialValue = emptyList())
+    val availableScriptNames = remember(dbScripts) {
+        dbScripts.map { it.name }.ifEmpty { emptyList() }
+    }
 
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("全部") }
@@ -210,7 +221,7 @@ fun ScheduledTaskManagerScreen(
     if (isCreatingNew || editorTarget != null) {
         TaskEditorSheet(
             existing = editorTarget,
-            availableScripts = tasksList.map { it.targetScript }.distinct(),
+            availableScripts = availableScriptNames,
             onDismiss = { isCreatingNew = false; editorTarget = null },
             onSave = { saved ->
                 val idx = tasksList.indexOfFirst { it.id == saved.id }
@@ -363,8 +374,8 @@ private fun TaskEditorSheet(existing: ScheduledTask?, availableScripts: List<Str
     var name by remember { mutableStateOf(existing?.name ?: "") }
     var cron by remember { mutableStateOf(existing?.cronExpression ?: "*/10 * * * *") }
     var scriptDropdownExpanded by remember { mutableStateOf(false) }
-    val scripts = availableScripts.ifEmpty { listOf("script.py") }
-    var selectedScript by remember { mutableStateOf(existing?.targetScript ?: scripts.first()) }
+    val scripts = availableScripts
+    var selectedScript by remember { mutableStateOf(existing?.targetScript ?: scripts.firstOrNull() ?: "") }
 
     val cronValid = remember(cron) { cron.trim().split(Regex("\\s+")).size == 5 }
     val cronHint = remember(cron, cronValid) {
@@ -375,11 +386,27 @@ private fun TaskEditorSheet(existing: ScheduledTask?, availableScripts: List<Str
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 10.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(text = if (existing == null) "配置新自动化调度" else "编辑调度任务", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
             OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("任务代号 / 名称") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-            ExposedDropdownMenuBox(expanded = scriptDropdownExpanded, onExpandedChange = { scriptDropdownExpanded = it }) {
-                OutlinedTextField(value = selectedScript, onValueChange = {}, readOnly = true, label = { Text("绑定目标脚本") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = scriptDropdownExpanded) }, colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(), modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(), shape = RoundedCornerShape(12.dp))
-                ExposedDropdownMenu(expanded = scriptDropdownExpanded, onDismissRequest = { scriptDropdownExpanded = false }) {
-                    scripts.forEach { script ->
-                        DropdownMenuItem(text = { Text(script, fontFamily = FontFamily.Monospace) }, onClick = { selectedScript = script; scriptDropdownExpanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
+            if (scripts.isEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "⚠️ 脚本库为空，请先前往「脚本管理」页扫描添加脚本，再回来配置定时任务。",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(14.dp)
+                    )
+                }
+            } else {
+                ExposedDropdownMenuBox(expanded = scriptDropdownExpanded, onExpandedChange = { scriptDropdownExpanded = it }) {
+                    OutlinedTextField(value = selectedScript, onValueChange = {}, readOnly = true, label = { Text("绑定目标脚本") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = scriptDropdownExpanded) }, colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(), modifier = Modifier.menuAnchor(MenuAnchorType.PrimaryNotEditable, true).fillMaxWidth(), shape = RoundedCornerShape(12.dp))
+                    ExposedDropdownMenu(expanded = scriptDropdownExpanded, onDismissRequest = { scriptDropdownExpanded = false }) {
+                        scripts.forEach { script ->
+                            DropdownMenuItem(text = { Text(script, fontFamily = FontFamily.Monospace) }, onClick = { selectedScript = script; scriptDropdownExpanded = false }, contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding)
+                        }
                     }
                 }
             }
@@ -392,7 +419,7 @@ private fun TaskEditorSheet(existing: ScheduledTask?, availableScripts: List<Str
                     val saved = existing?.copy(name = name, targetScript = selectedScript, cronExpression = cron) ?: ScheduledTask(id = "task_${System.currentTimeMillis()}", name = name, targetScript = selectedScript, cronExpression = cron, nextRunTime = "计算中...", lastRunResult = "从未执行")
                     onSave(saved)
                 },
-                enabled = name.isNotBlank() && cronValid, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(12.dp)
+                enabled = name.isNotBlank() && cronValid && selectedScript.isNotBlank(), modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(12.dp)
             ) {
                 Text(if (existing == null) "挂载上线" else "保存修改", fontWeight = FontWeight.Bold)
             }
