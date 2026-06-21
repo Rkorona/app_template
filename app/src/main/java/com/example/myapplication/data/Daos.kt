@@ -56,6 +56,24 @@ interface ScheduledTaskDao {
 }
 
 @Dao
+interface RunLogDao {
+    @Query("SELECT * FROM run_logs WHERE scriptName = :scriptName ORDER BY startTime DESC LIMIT 20")
+    fun getLogsForScript(scriptName: String): Flow<List<RunLogEntity>>
+
+    @Query("SELECT * FROM run_logs ORDER BY startTime DESC LIMIT 50")
+    fun getAllRecent(): Flow<List<RunLogEntity>>
+
+    @Insert
+    suspend fun insert(log: RunLogEntity)
+
+    @Query("DELETE FROM run_logs WHERE scriptName = :scriptName AND id NOT IN (SELECT id FROM run_logs WHERE scriptName = :scriptName ORDER BY startTime DESC LIMIT 20)")
+    suspend fun pruneOldLogs(scriptName: String)
+
+    @Query("DELETE FROM run_logs WHERE scriptName = :scriptName")
+    suspend fun deleteForScript(scriptName: String)
+}
+
+@Dao
 interface ScriptDao {
     @Query("SELECT * FROM scripts")
     fun getAll(): Flow<List<ScriptEntity>>

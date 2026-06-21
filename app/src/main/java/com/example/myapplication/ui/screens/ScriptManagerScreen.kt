@@ -52,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myapplication.data.ScriptEntity
 import com.example.myapplication.ui.components.TerminalConsoleBottomSheet
+import com.example.myapplication.ui.components.LogViewerBottomSheet
 import com.example.myapplication.ui.theme.TypeColorPython
 import com.example.myapplication.ui.theme.StatusRunning
 import com.example.myapplication.ui.theme.TerminalSuccess
@@ -75,7 +76,8 @@ fun ScriptManagerScreen(
     val filters = listOf("全部", "Python", "Shell", "Node.js")
 
     // 弹窗与控制状态
-    var activeTerminalScript by remember { mutableStateOf<ScriptEntity?>(null) }
+    var activeTerminalScript  by remember { mutableStateOf<ScriptEntity?>(null) }
+    var activeLogViewerScript by remember { mutableStateOf<ScriptEntity?>(null) }
     var scriptPendingDelete by remember { mutableStateOf<ScriptEntity?>(null) }
     var isFabExpanded by remember { mutableStateOf(false) }
 
@@ -251,7 +253,7 @@ fun ScriptManagerScreen(
                                 script = script,
                                 onExecuteNow = { activeTerminalScript = script },
                                 onOpenDetail = { onOpenDetail(script) },
-                                onViewLogs = { activeTerminalScript = script },
+                                onViewLogs = { activeLogViewerScript = script },
                                 onDeleteRequest = { scriptPendingDelete = script }
                             )
                         }
@@ -278,12 +280,20 @@ fun ScriptManagerScreen(
         }
     }
 
-    // ─── 🌟 终端审计舱合流 ───
+    // ─── 🌟 终端审计舱：立即执行 ───
     activeTerminalScript?.let { script ->
         TerminalConsoleBottomSheet(
-            taskName = script.name,
+            taskName   = script.name,
             scriptName = if (script.isFolder) script.entryPoint else script.name,
-            onDismiss = { activeTerminalScript = null }
+            onDismiss  = { activeTerminalScript = null }
+        )
+    }
+
+    // ─── 📋 历史日志查看器（只读，不执行脚本）───
+    activeLogViewerScript?.let { script ->
+        LogViewerBottomSheet(
+            scriptName = if (script.isFolder) script.entryPoint else script.name,
+            onDismiss  = { activeLogViewerScript = null }
         )
     }
 

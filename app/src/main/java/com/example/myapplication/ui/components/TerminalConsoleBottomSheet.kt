@@ -22,6 +22,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.AppDatabase
+import com.example.myapplication.data.RunLogEntity
 import com.example.myapplication.utils.TermuxRunner
 import com.example.myapplication.ui.theme.TerminalInfo
 import com.example.myapplication.ui.theme.TerminalSuccess
@@ -54,8 +55,8 @@ fun TerminalConsoleBottomSheet(
 
     val db = remember { AppDatabase.getDatabase(context) }
     val scriptDao = remember { db.scriptDao() }
+    val runLogDao = remember { db.runLogDao() }
 
-    // 提前捕获主题色，供协程内部（非 Composable 上下文）使用
     val separatorColor = MaterialTheme.colorScheme.outlineVariant
 
     LaunchedEffect(taskName) {
@@ -74,6 +75,10 @@ fun TerminalConsoleBottomSheet(
 
         logs.add(LogLine("[INFO] 检测运行环境: ${scriptEntity.type} (物理扫描正常)...", TerminalInfo))
 
+        val startTime = System.currentTimeMillis()
+        val rawLines = mutableListOf<String>()
+        var exitCode = -1
+
         withContext(Dispatchers.IO) {
             var serverSocket: ServerSocket? = null
             var clientSocket: Socket? = null
@@ -91,9 +96,9 @@ fun TerminalConsoleBottomSheet(
                 }
 
                 TermuxRunner.executeScript(
-                    context = context,
+                    context    = context,
                     scriptName = scriptEntity.name,
-                    isFolder = scriptEntity.isFolder,
+                    isFolder   = scriptEntity.isFolder,
                     entryPoint = scriptEntity.entryPoint,
                     scriptType = scriptEntity.type,
                     socketPort = allocatedPort
@@ -114,7 +119,15 @@ fun TerminalConsoleBottomSheet(
 
                 while (reader.readLine().also { line = it } != null) {
                     val finalLine = line!!
+                    rawLines.add(finalLine)
+
+                    // 解析退出码
+                    if (finalLine.startsWith("[SYSTEM_EXIT_CODE]:")) {
+                        exitCode = finalLine.removePrefix("[SYSTEM_EXIT_CODE]:").trim().toIntOrNull() ?: -1
+                    }
+
                     val logColor = when {
+                        finalLine.startsWith("[SYSTEM_EXIT_CODE]:") -> TerminalInfo
                         finalLine.contains("error", ignoreCase = true) || finalLine.contains("failed", ignoreCase = true) -> TerminalError
                         finalLine.contains("success", ignoreCase = true) || finalLine.contains("installed", ignoreCase = true) -> TerminalSuccess
                         finalLine.contains("warning", ignoreCase = true) -> TerminalWarn
@@ -142,10 +155,34 @@ fun TerminalConsoleBottomSheet(
                     } catch (ioe: Exception) {
                         ioe.printStackTrace()
                     }
+
+                    val durationMs = System.currentTimeMillis() - startTime
+
+                    // 将本次执行日志持久化到数据库
+                    try {
+                        val logText = rawLines
+                            .filter { !it.startsWith("[SYSTEM_EXIT_CODE]:") }
+                            .joinToString("\n")
+                        val logEntity = RunLogEntity(
+                            scriptName = scriptName,
+                            startTime  = startTime,
+                            durationMs = durationMs,
+                            exitCode   = exitCode,
+                            logText    = logText
+                        )
+                        runLogDao.insert(logEntity)
+                        runLogDao.pruneOldLogs(scriptName)
+                    } catch (e: Exception) {
+                        // 日志入库失败不影响主流程
+                    }
+
                     withContext(Dispatchers.Main) {
                         isRunning = false
                         logs.add(LogLine("─".repeat(48), separatorColor))
-                        logs.add(LogLine("[FINISHED] 自动化引擎完成调度。进程正常退出 (Exit Code: 0)", TerminalSuccess))
+                        val exitMsg = if (exitCode == 0) "自动化引擎完成调度。进程正常退出 (Exit Code: 0)"
+                                      else if (exitCode == -1) "自动化引擎完成调度。进程退出 (Exit Code: 未知)"
+                                      else "自动化引擎完成调度。进程异常退出 (Exit Code: $exitCode)"
+                        logs.add(LogLine("[FINISHED] $exitMsg", if (exitCode == 0) TerminalSuccess else TerminalError))
                     }
                 }
             }
@@ -173,7 +210,6 @@ fun TerminalConsoleBottomSheet(
                 .padding(horizontal = 16.dp)
                 .padding(bottom = 24.dp)
         ) {
-            // ── 顶部标题栏 ──
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -191,9 +227,7 @@ fun TerminalConsoleBottomSheet(
                             Icons.Default.Terminal,
                             contentDescription = null,
                             tint = colors.onPrimaryContainer,
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .size(18.dp)
+                            modifier = Modifier.padding(8.dp).size(18.dp)
                         )
                     }
                     Column {
@@ -215,12 +249,8 @@ fun TerminalConsoleBottomSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // 状态徽章
                     Surface(
-                        color = if (isRunning)
-                            TerminalWarn.copy(alpha = 0.15f)
-                        else
-                            TerminalSuccess.copy(alpha = 0.15f),
+                        color = if (isRunning) TerminalWarn.copy(alpha = 0.15f) else TerminalSuccess.copy(alpha = 0.15f),
                         shape = RoundedCornerShape(20.dp)
                     ) {
                         Row(
@@ -243,11 +273,7 @@ fun TerminalConsoleBottomSheet(
                         }
                     }
 
-                    // 关闭按钮
-                    IconButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.size(32.dp)
-                    ) {
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(32.dp)) {
                         Icon(
                             Icons.Default.Close,
                             contentDescription = "关闭",
@@ -260,7 +286,6 @@ fun TerminalConsoleBottomSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── 日志计数 ──
             Text(
                 text = "${logs.size} 条日志",
                 style = MaterialTheme.typography.labelSmall,
@@ -268,7 +293,6 @@ fun TerminalConsoleBottomSheet(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // ── 日志区域 ──
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -292,7 +316,6 @@ fun TerminalConsoleBottomSheet(
                             lineHeight = 18.sp
                         )
                     }
-                    // 占位，确保最后一条日志不被遮挡
                     item { Spacer(Modifier.height(8.dp)) }
                 }
             }

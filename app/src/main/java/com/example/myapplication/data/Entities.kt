@@ -38,6 +38,16 @@ data class ScheduledTaskEntity(
     val themeColorHex: String? = null
 )
 
+@Entity(tableName = "run_logs")
+data class RunLogEntity(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val scriptName: String,
+    val startTime: Long = System.currentTimeMillis(),
+    val durationMs: Long = 0L,
+    val exitCode: Int = -1,
+    val logText: String = ""
+)
+
 @Entity(tableName = "scripts")
 data class ScriptEntity(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),

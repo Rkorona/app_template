@@ -18,13 +18,14 @@ class Converters {
     fun toDepStatus(value: String): DepStatus = enumValueOf(value)
 }
 
-@Database(entities = [EnvVarEntity::class, DependencyEntity::class, ScriptEntity::class, ScheduledTaskEntity::class], version = 3, exportSchema = false)
+@Database(entities = [EnvVarEntity::class, DependencyEntity::class, ScriptEntity::class, ScheduledTaskEntity::class, RunLogEntity::class], version = 4, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun envVarDao(): EnvVarDao
     abstract fun dependencyDao(): DependencyDao
     abstract fun scriptDao(): ScriptDao
     abstract fun scheduledTaskDao(): ScheduledTaskDao
+    abstract fun runLogDao(): RunLogDao
 
     // 单例模式，防止多次打开数据库
     companion object {
