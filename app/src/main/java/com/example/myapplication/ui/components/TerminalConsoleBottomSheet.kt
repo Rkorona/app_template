@@ -1,8 +1,6 @@
 // app_template/app/src/main/java/com/example/myapplication/ui/components/TerminalConsoleBottomSheet.kt
 package com.example.myapplication.ui.components
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,13 +8,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -26,12 +22,12 @@ import androidx.compose.ui.unit.sp
 import com.example.myapplication.data.AppDatabase
 import com.example.myapplication.utils.TermuxRunner
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.net.ServerSocket
+import java.net.Socket
 
 data class LogLine(val text: String, val color: Color = Color(0xFF4ADE80))
 
@@ -50,7 +46,7 @@ fun TerminalConsoleBottomSheet(
     val logs = remember { mutableStateListOf<LogLine>() }
     var isRunning by remember { mutableStateOf(true) }
 
-    // 初始化本地 Room 数据库以便自动获取运行所需的脚本属性（类型、是否是工程）
+    // 初始化本地 Room 数据库
     val db = remember { AppDatabase.getDatabase(context) }
     val scriptDao = remember { db.scriptDao() }
 
@@ -58,7 +54,6 @@ fun TerminalConsoleBottomSheet(
     LaunchedEffect(taskName) {
         logs.add(LogLine("[INFO] 初始化自动化执行管线...", Color(0xFF38BDF8)))
         
-        // 自动对齐：优先用脚本名去数据库查匹配，如果没有就用任务名去查
         val scriptEntity = withContext(Dispatchers.IO) {
             scriptDao.getByName(scriptName) ?: scriptDao.getByName(taskName)
         }
@@ -75,41 +70,43 @@ fun TerminalConsoleBottomSheet(
         // 在 IO 线程启动 Socket 拦截服务器
         withContext(Dispatchers.IO) {
             var serverSocket: ServerSocket? = null
+            var clientSocket: Socket? = null
+            var reader: BufferedReader? = null
+            
             try {
-                // 监听本地 9090 端口
-                serverSocket = ServerSocket().apply {
+                // 1. 【核心改进：动态空闲端口】 传入端口 0 意味着让系统自动分配一个当前绝对可用的空闲端口
+                serverSocket = ServerSocket(0).apply {
                     reuseAddress = true
-                    bind(java.net.InetSocketAddress(9090))
+                    soTimeout = 15000 // 15 秒连接超时
                 }
+                val allocatedPort = serverSocket.localPort
                 
-                // 给 Termux 下发执行指令，并将输出重定向回到本地 9090 端口
+                logs.add(LogLine("[INFO] 已分配本地物理管道端口: $allocatedPort", Color(0xFF38BDF8)))
+
+                // 2. 启动 Termux 并将动态分配的端口传递过去
                 TermuxRunner.executeScript(
                     context = context,
                     scriptName = scriptEntity.name,
                     isFolder = scriptEntity.isFolder,
                     entryPoint = scriptEntity.entryPoint,
                     scriptType = scriptEntity.type,
-                    socketPort = 9090
+                    socketPort = allocatedPort
                 )
-                
 
                 logs.add(LogLine("[EXEC] 调度指令已派发至 Termux 引擎，等待物理管道连通...", Color(0xFFA855F7)))
 
-                // 设置连接超时时间为 5 秒，防止 Termux 因权限未给等问题导致 App 无限假死
-                serverSocket.soTimeout = 15000
-                val clientSocket = serverSocket.accept()
+                // 等待连接
+                clientSocket = serverSocket.accept()
                 
                 withContext(Dispatchers.Main) {
                     logs.add(LogLine("[INFO] 物理数据管道双向连通建立成功，开始承接运行日志 ➔", Color(0xFF22C55E)))
                 }
 
-                val reader = BufferedReader(InputStreamReader(clientSocket.inputStream))
+                reader = BufferedReader(InputStreamReader(clientSocket.inputStream))
                 var line: String?
-                // 核心循环：实时一行行读取 Termux 吐回来的真实数据
+                
                 while (reader.readLine().also { line = it } != null) {
                     val finalLine = line!!
-                    
-                    // 基于语义色解析（红/黄/绿/蓝）
                     val logColor = when {
                         finalLine.contains("error", ignoreCase = true) || finalLine.contains("failed", ignoreCase = true) -> Color(0xFFF87171)
                         finalLine.contains("success", ignoreCase = true) || finalLine.contains("installed", ignoreCase = true) -> Color(0xFF4ADE80)
@@ -131,17 +128,26 @@ fun TerminalConsoleBottomSheet(
                     logs.add(LogLine("[ERROR] 管道拦截异常: ${e.message}", Color(0xFFF87171)))
                 }
             } finally {
-                serverSocket?.close()
-                withContext(Dispatchers.Main) {
-                    isRunning = false
-                    logs.add(LogLine("[INFO] ──────────────────────────────────────────", Color.Gray))
-                    logs.add(LogLine("[FINISHED] 自动化引擎完成调度。进程正常退出 (Exit Code: 0)", Color(0xFF22C55E)))
+                // 3. 【核心改进：防内存与端口泄漏】使用 NonCancellable 确保即使协程被取消，清理代码也一定会完整执行
+                withContext(NonCancellable) {
+                    try {
+                        reader?.close()
+                        clientSocket?.close()
+                        serverSocket?.close()
+                    } catch (ioe: Exception) {
+                        ioe.printStackTrace()
+                    }
+                    withContext(Dispatchers.Main) {
+                        isRunning = false
+                        logs.add(LogLine("[INFO] ──────────────────────────────────────────", Color.Gray))
+                        logs.add(LogLine("[FINISHED] 自动化引擎完成调度。进程正常退出 (Exit Code: 0)", Color(0xFF22C55E)))
+                    }
                 }
             }
         }
     }
 
-    // 锁底自动滑动流：只要有新日志加入，瞬间丝滑滚到最底端
+    // 锁底自动滑动流
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty()) {
             listState.animateScrollToItem(logs.size - 1)
