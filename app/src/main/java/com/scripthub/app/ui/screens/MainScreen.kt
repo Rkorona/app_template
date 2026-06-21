@@ -13,6 +13,7 @@ import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Security
@@ -42,7 +43,7 @@ import java.util.Locale
 fun MainScreen() {
     val context = LocalContext.current
     var currentRoute by remember { mutableStateOf("Dashboard") }
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val scope = rememberCoroutineScope()
 
     // ─── 数据库订阅（为仪表盘提供实时数据）───
@@ -219,6 +220,7 @@ fun MainScreen() {
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             if (currentRoute != "ScriptEditor") {
                 ExpressiveTopAppBar(
