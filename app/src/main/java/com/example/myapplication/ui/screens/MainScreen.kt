@@ -26,8 +26,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.data.AppDatabase
+import androidx.compose.material.icons.filled.History
 import com.example.myapplication.ui.components.ExpressiveNavigationBar
 import com.example.myapplication.ui.components.ExpressiveTopAppBar
+import com.example.myapplication.ui.components.GlobalLogBottomSheet
 import com.example.myapplication.utils.CronNextRunCalculator
 import com.example.myapplication.utils.FileHelper
 import kotlinx.coroutines.launch
@@ -121,6 +123,9 @@ fun MainScreen() {
     var editingFileName by remember { mutableStateOf("") }
     var editingIsFolder by remember { mutableStateOf(false) }
     var editingEntryPoint by remember { mutableStateOf("") }
+
+    // ─── 全局日志面板 ───
+    var showGlobalLog by remember { mutableStateOf(false) }
 
     // 检查并请求 MANAGE_EXTERNAL_STORAGE 权限
     fun checkPermission() {
@@ -218,8 +223,18 @@ fun MainScreen() {
             if (currentRoute != "ScriptEditor") {
                 ExpressiveTopAppBar(
                     titleText = titleText,
-                    scrollBehavior = scrollBehavior
-                    
+                    scrollBehavior = scrollBehavior,
+                    actions = {
+                        if (currentRoute == "ScheduledTasks") {
+                            IconButton(onClick = { showGlobalLog = true }) {
+                                Icon(
+                                    imageVector = Icons.Default.History,
+                                    contentDescription = "全部日志",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                 )
             }
         },
@@ -265,5 +280,9 @@ fun MainScreen() {
                 }
             }
         }
+    }
+
+    if (showGlobalLog) {
+        GlobalLogBottomSheet(onDismiss = { showGlobalLog = false })
     }
 }

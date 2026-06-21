@@ -14,7 +14,8 @@ import androidx.compose.ui.text.style.TextOverflow
 fun ExpressiveTopAppBar(
     titleText: String,
     scrollBehavior: TopAppBarScrollBehavior,
-    onMenuClick: () -> Unit = {}
+    onMenuClick: () -> Unit = {},
+    actions: @Composable () -> Unit = {}
 ) {
     MediumTopAppBar(
         colors = TopAppBarDefaults.topAppBarColors(
@@ -29,16 +30,7 @@ fun ExpressiveTopAppBar(
                 style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold)
             )
         },
-        // navigationIcon = {
-            // IconButton(onClick = { }) {
-                // Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            // }
-        // },
-        // actions = {
-            // IconButton(onClick = onMenuClick) {
-                // Icon(imageVector = Icons.Filled.Menu, contentDescription = "Menu")
-            // }
-        // },
+        actions = { actions() },
         scrollBehavior = scrollBehavior
     )
 }
