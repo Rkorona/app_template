@@ -4,7 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
-import com.example.myapplication.utils.TermuxRunner
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class AlarmScheduleReceiver : BroadcastReceiver() {
 
@@ -17,19 +19,7 @@ class AlarmScheduleReceiver : BroadcastReceiver() {
 
         Log.i(TAG, "AlarmManager 触发任务[$taskName] 脚本:$scriptName")
 
-        try {
-            TermuxRunner.executeScript(
-                context    = context,
-                scriptName = scriptName,
-                isFolder   = false,
-                entryPoint = "",
-                scriptType = scriptType
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "执行失败: ${e.message}")
-        }
-
-        // 立即注册下次闹钟（续期）
+        // 立即注册下次闹钟（续期），确保不受后续执行延迟影响
         AlarmManagerScheduler.scheduleNextAlarm(
             context    = context,
             taskId     = taskId,
@@ -38,6 +28,23 @@ class AlarmScheduleReceiver : BroadcastReceiver() {
             cronExpr   = cronExpr,
             scriptType = scriptType
         )
+
+        // 使用 goAsync() 延长 BroadcastReceiver 生命周期，以便异步捕获日志
+        val pendingResult = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                ScheduledScriptExecutor.executeAndLog(
+                    context    = context,
+                    scriptName = scriptName,
+                    scriptType = scriptType,
+                    taskName   = taskName
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "执行失败: ${e.message}")
+            } finally {
+                pendingResult.finish()
+            }
+        }
     }
 
     companion object {

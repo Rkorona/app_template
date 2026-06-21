@@ -9,33 +9,29 @@ import androidx.work.Worker
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.example.myapplication.utils.CronNextRunCalculator
-import com.example.myapplication.utils.TermuxRunner
+import kotlinx.coroutines.runBlocking
 import java.util.concurrent.TimeUnit
 
 class CronScheduleWorker(appContext: Context, params: WorkerParameters) : Worker(appContext, params) {
 
     override fun doWork(): Result {
-        val taskId        = inputData.getString(KEY_TASK_ID)        ?: return Result.failure()
-        val taskName      = inputData.getString(KEY_TASK_NAME)      ?: return Result.failure()
-        val scriptName    = inputData.getString(KEY_SCRIPT_NAME)    ?: return Result.failure()
-        val cronExpr      = inputData.getString(KEY_CRON_EXPR)      ?: return Result.failure()
-        val scriptType    = inputData.getString(KEY_SCRIPT_TYPE)    ?: "Shell"
+        val taskId     = inputData.getString(KEY_TASK_ID)     ?: return Result.failure()
+        val taskName   = inputData.getString(KEY_TASK_NAME)   ?: return Result.failure()
+        val scriptName = inputData.getString(KEY_SCRIPT_NAME) ?: return Result.failure()
+        val cronExpr   = inputData.getString(KEY_CRON_EXPR)   ?: return Result.failure()
+        val scriptType = inputData.getString(KEY_SCRIPT_TYPE) ?: "Shell"
 
         Log.i(TAG, "WorkManager 触发任务[$taskName] 脚本:$scriptName")
 
-        try {
-            TermuxRunner.executeScript(
+        runBlocking {
+            ScheduledScriptExecutor.executeAndLog(
                 context    = applicationContext,
                 scriptName = scriptName,
-                isFolder   = false,
-                entryPoint = "",
-                scriptType = scriptType
+                scriptType = scriptType,
+                taskName   = taskName
             )
-        } catch (e: Exception) {
-            Log.e(TAG, "执行失败: ${e.message}")
         }
 
-        // 计算下次触发时间并重新入队
         scheduleNext(applicationContext, taskId, taskName, scriptName, cronExpr, scriptType)
         return Result.success()
     }
