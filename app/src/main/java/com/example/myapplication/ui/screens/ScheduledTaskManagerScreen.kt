@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.myapplication.data.AppDatabase
 import com.example.myapplication.data.ScheduledTaskEntity
 import com.example.myapplication.ui.components.TerminalConsoleBottomSheet
+import com.example.myapplication.ui.components.LogViewerBottomSheet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import com.example.myapplication.utils.CronTranslator
@@ -181,7 +182,8 @@ fun ScheduledTaskManagerScreen(
 
     var isCreatingNew by remember { mutableStateOf(false) }
     var editorTarget by remember { mutableStateOf<ScheduledTask?>(null) }
-    var activeTerminalTask by remember { mutableStateOf<ScheduledTask?>(null) }
+    var activeTerminalTask  by remember { mutableStateOf<ScheduledTask?>(null) }
+    var activeLogViewerTask by remember { mutableStateOf<ScheduledTask?>(null) }
     var pendingDelete by remember { mutableStateOf<ScheduledTask?>(null) }
 
     val failedCount = tasksList.count { !it.isSuccess }
@@ -294,7 +296,7 @@ fun ScheduledTaskManagerScreen(
                                 }
                             },
                             onExecuteNow = { activeTerminalTask = task },
-                            onViewLog = { activeTerminalTask = task },
+                            onViewLog = { activeLogViewerTask = task },
                             onEdit = { editorTarget = task },
                             onDelete = { pendingDelete = task }
                         )
@@ -354,6 +356,10 @@ fun ScheduledTaskManagerScreen(
 
     activeTerminalTask?.let { task ->
         TerminalConsoleBottomSheet(taskName = task.name, scriptName = task.targetScript, onDismiss = { activeTerminalTask = null })
+    }
+
+    activeLogViewerTask?.let { task ->
+        LogViewerBottomSheet(scriptName = task.targetScript, onDismiss = { activeLogViewerTask = null })
     }
 }
 
