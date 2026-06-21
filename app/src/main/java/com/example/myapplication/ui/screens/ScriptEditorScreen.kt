@@ -77,7 +77,6 @@ private fun detectLang(fileName: String): EditorLang = when {
     else -> EditorLang.PLAIN
 }
 
-@Composable
 private fun syntaxHighlight(
     text: String,
     lang: EditorLang,
