@@ -513,6 +513,59 @@ private fun EmptyTasksState(modifier: Modifier = Modifier) {
     }
 }
 
+private fun cronToHuman(expr: String): String {
+    val parts = expr.trim().split(Regex("\\s+"))
+    if (parts.size != 5) return expr
+    val (min, hour, dom, month, dow) = parts
+
+    // 每分钟
+    if (min == "*" && hour == "*" && dom == "*" && month == "*" && dow == "*")
+        return "每分钟运行一次"
+
+    // */N 分钟
+    if (min.startsWith("*/") && hour == "*" && dom == "*" && month == "*" && dow == "*") {
+        val n = min.removePrefix("*/").toIntOrNull() ?: return expr
+        return if (n == 1) "每分钟运行一次" else "每 $n 分钟运行一次"
+    }
+
+    // 固定分钟，每小时
+    if (hour == "*" && dom == "*" && month == "*" && dow == "*") {
+        return if (min == "0") "每小时整点运行" else "每小时第 $min 分运行"
+    }
+
+    // */N 小时
+    if (min == "0" && hour.startsWith("*/") && dom == "*" && month == "*" && dow == "*") {
+        val n = hour.removePrefix("*/").toIntOrNull() ?: return expr
+        return "每 $n 小时运行一次"
+    }
+
+    // 每天固定时间
+    if (dom == "*" && month == "*" && dow == "*") {
+        val h = hour.toIntOrNull(); val m = min.toIntOrNull()
+        if (h != null && m != null)
+            return "每天 %02d:%02d 运行".format(h, m)
+    }
+
+    // 每周固定
+    if (dom == "*" && month == "*" && dow != "*") {
+        val dayMap = mapOf("0" to "周日", "1" to "周一", "2" to "周二", "3" to "周三",
+                           "4" to "周四", "5" to "周五", "6" to "周六", "7" to "周日")
+        val dayStr = dayMap[dow] ?: "周$dow"
+        val h = hour.toIntOrNull(); val m = min.toIntOrNull()
+        if (h != null && m != null)
+            return "每$dayStr %02d:%02d 运行".format(h, m)
+    }
+
+    // 每月固定日
+    if (month == "*" && dow == "*") {
+        val d = dom.toIntOrNull(); val h = hour.toIntOrNull(); val m = min.toIntOrNull()
+        if (d != null && h != null && m != null)
+            return "每月 ${d}日 %02d:%02d 运行".format(h, m)
+    }
+
+    return expr
+}
+
 @Composable
 private fun CronTaskCard(task: ScheduledTask, onStatusToggle: (Boolean) -> Unit, onExecuteNow: () -> Unit, onViewLog: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     val isEnabled = task.initialStatus == CronTaskStatus.Enabled
@@ -566,29 +619,29 @@ private fun CronTaskCard(task: ScheduledTask, onStatusToggle: (Boolean) -> Unit,
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
-                        Text(text = task.nextRunTime, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
-                        Text(text = task.cronExpression, fontSize = 10.sp, fontFamily = FontFamily.Monospace, color = if (isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = cronToHuman(task.cronExpression),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isEnabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                        )
+                        Text(
+                            text = task.cronExpression,
+                            fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (isEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.7f) else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                        )
                     }
-                    Icon(Icons.Default.History, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(14.dp))
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(imageVector = if (task.isSuccess) Icons.Default.CheckCircle else Icons.Default.Warning, contentDescription = null, tint = if (!task.isSuccess && isEnabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), modifier = Modifier.size(13.dp))
-                        Text(text = task.lastRunResult, fontSize = 11.sp, color = if (!task.isSuccess && isEnabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f))
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = onExecuteNow, enabled = isEnabled, modifier = Modifier.size(26.dp)) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = "立即执行", tint = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(26.dp)) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
                         }
-                        Box {
-                            IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(26.dp)) { Icon(Icons.Default.MoreVert, contentDescription = "更多", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(16.dp)) }
-                            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                                DropdownMenuItem(text = { Text("编辑") }, leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }, onClick = { menuExpanded = false; onEdit() })
-                                DropdownMenuItem(text = { Text("查看执行日志") }, leadingIcon = { Icon(Icons.Default.History, contentDescription = null) }, onClick = { menuExpanded = false; onViewLog() })
-                                DropdownMenuItem(text = { Text("删除", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }, onClick = { menuExpanded = false; onDelete() })
-                            }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                            DropdownMenuItem(text = { Text("立即执行") }, leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) }, onClick = { menuExpanded = false; onExecuteNow() })
+                            DropdownMenuItem(text = { Text("编辑") }, leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }, onClick = { menuExpanded = false; onEdit() })
+                            DropdownMenuItem(text = { Text("查看执行日志") }, leadingIcon = { Icon(Icons.Default.History, contentDescription = null) }, onClick = { menuExpanded = false; onViewLog() })
+                            DropdownMenuItem(text = { Text("删除", color = MaterialTheme.colorScheme.error) }, leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error) }, onClick = { menuExpanded = false; onDelete() })
                         }
                     }
                 }
