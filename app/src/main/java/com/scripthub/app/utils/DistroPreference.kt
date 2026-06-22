@@ -3,8 +3,7 @@ package com.scripthub.app.utils
 import android.content.Context
 
 enum class DistroType(val displayName: String, val id: String) {
-    DEBIAN("Debian 12 (Bookworm)", "debian"),
-    UBUNTU("Ubuntu 22.04 (Jammy LTS)", "ubuntu")
+    DEBIAN("Debian 12 (Bookworm)", "debian")
 }
 
 object DistroPreference {

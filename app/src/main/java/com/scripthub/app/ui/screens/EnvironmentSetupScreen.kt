@@ -276,10 +276,7 @@ private fun DistroOptionCard(
                 }
             }
             Text(
-                text  = when (distro) {
-                    DistroType.DEBIAN -> "稳定首选 · apt 包管理 · 约 150MB"
-                    DistroType.UBUNTU -> "生态丰富 · apt 包管理 · 约 200MB"
-                },
+                text  = "稳定首选 · apt 包管理 · 约 150MB",
                 style = MaterialTheme.typography.bodySmall,
                 color = colors.onSurfaceVariant
             )

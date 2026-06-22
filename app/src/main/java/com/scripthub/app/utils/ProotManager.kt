@@ -32,8 +32,6 @@ object ProotManager {
     // LXC 官方镜像基础路径，自动抓取最新日期目录
     private const val DEBIAN_ROOTFS_BASE =
         "https://images.linuxcontainers.org/images/debian/bookworm/arm64/default/"
-    private const val UBUNTU_ROOTFS_BASE =
-        "https://images.linuxcontainers.org/images/ubuntu/jammy/arm64/default/"
 
     private val _progress = MutableStateFlow(SetupProgress())
     val progress: StateFlow<SetupProgress> = _progress
@@ -126,7 +124,7 @@ object ProotManager {
             if (!isDistroInstalled(context, distro)) {
                 rootfsDir.deleteRecursively() // 清理可能存在的半吊子残存目录
                 rootfsDir.mkdirs()
-                val base = if (distro == DistroType.DEBIAN) DEBIAN_ROOTFS_BASE else UBUNTU_ROOTFS_BASE
+                val base = DEBIAN_ROOTFS_BASE
                 emit("正在查询 ${distro.displayName} 最新镜像版本...", 19)
                 val url = fetchLatestRootfsUrl(base)
                 Log.d(TAG, "rootfs URL: $url")
@@ -467,6 +465,32 @@ object ProotManager {
             Log.d(TAG, "resolv.conf 已写入公共 DNS")
         } catch (e: Exception) {
             Log.w(TAG, "resolv.conf 写入失败: ${e.message}")
+        }
+
+        // nsswitch.conf：修复 proot 内 DNS 解析顺序
+        // Debian 默认含 "mdns4_minimal [NOTFOUND=return]"，在 proot 里 mDNS 守护进程不存在，
+        // 该条目导致 DNS 查询直接被截断返回失败，apt 无法联网。
+        // 覆盖为最简洁的 "files dns"，保证走正常 DNS 流程。
+        try {
+            val nsswitchFile = File(rootfsDir, "etc/nsswitch.conf")
+            val nsswitchNio  = nsswitchFile.toPath()
+            val content = if (java.nio.file.Files.exists(nsswitchNio)) {
+                java.nio.file.Files.readString(nsswitchNio)
+            } else ""
+            // 只修改 hosts 那一行，其他行保持不变
+            val fixed = if (content.contains("hosts:")) {
+                content.lines().joinToString("\n") { line ->
+                    if (line.trimStart().startsWith("hosts:"))
+                        "hosts:          files dns"
+                    else line
+                }
+            } else {
+                content + "\nhosts:          files dns\n"
+            }
+            java.nio.file.Files.writeString(nsswitchNio, fixed)
+            Log.d(TAG, "nsswitch.conf hosts 行已修复为 'files dns'")
+        } catch (e: Exception) {
+            Log.w(TAG, "nsswitch.conf 修复失败: ${e.message}")
         }
 
         // 环境变量脚本
