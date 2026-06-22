@@ -63,8 +63,25 @@ object ProotManager {
         return fallback
     }
 
-    fun getRootfsDir(context: Context, distro: DistroType): File =
-        File(context.getExternalFilesDir("proot-rootfs"), distro.id)
+    fun getRootfsDir(context: Context, distro: DistroType): File {
+        // 优先使用内部存储：支持真正的 symlink（外部存储 FUSE 不支持，导致 bin→usr/bin 失效）
+        val internal = File(context.filesDir, "proot-rootfs/${distro.id}")
+        if (internal.exists()) return internal
+
+        // 迁移旧版：外部存储已有安装 → 自动迁移到内部存储
+        val external = context.getExternalFilesDir("proot-rootfs")?.let { File(it, distro.id) }
+        if (external != null && external.exists() && File(external, ".scripthub_installed").exists()) {
+            Log.d(TAG, "迁移 rootfs 从外部存储到内部存储...")
+            try {
+                external.copyRecursively(internal, overwrite = true)
+                external.deleteRecursively()
+                Log.d(TAG, "rootfs 迁移完成")
+            } catch (e: Exception) {
+                Log.w(TAG, "rootfs 迁移失败，继续使用内部路径: ${e.message}")
+            }
+        }
+        return internal
+    }
 
     fun isProotReady(context: Context): Boolean {
         val bin = getProotBin(context)
@@ -342,10 +359,13 @@ object ProotManager {
         val prootBin   = getProotBin(context).absolutePath
         val rootfsPath = getRootfsDir(context, distro).absolutePath
         val scriptsDir = "/sdcard/QLPanel/scripts"
+        // 使用 app 自己的 tmp 目录，避免 proot 扫描 Termux 路径
+        val tmpDir     = File(context.cacheDir, "proot-tmp").also { it.mkdirs() }.absolutePath
 
         return listOf(
             prootBin,
             "--rootfs=$rootfsPath",
+            "--tmpdir=$tmpDir",
             "-0",
             "--link2symlink",
             "-b", "/proc:/proc",
