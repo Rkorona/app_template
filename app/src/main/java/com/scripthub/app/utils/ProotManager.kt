@@ -327,9 +327,24 @@ object ProotManager {
                         if (entry.isDirectory) {
                             targetFile.mkdirs()
                         } else if (entry.isSymbolicLink) {
-                            // 软链接逻辑不变（省略）
                             try {
-                                if (targetFile.exists() || Files.isSymbolicLink(targetFile.toPath())) targetFile.delete()
+                                // 【修复】File.delete() 无法删除目录，必须区分处理
+                                // 否则 lib/、bin/ 等空目录残留，导致 lib->usr/lib 软链接无法创建，
+                                // proot 找不到 ELF 解释器 /lib/ld-linux-aarch64.so.1
+                                when {
+                                    Files.isSymbolicLink(targetFile.toPath()) -> targetFile.delete()
+                                    targetFile.isDirectory -> {
+                                        val children = targetFile.listFiles()
+                                        if (children == null || children.isEmpty()) {
+                                            targetFile.delete() // 空目录，安全删除
+                                        } else {
+                                            // 非空真实目录：不删除，跳过此软链接条目
+                                            Log.w(TAG, "软链接目标为非空目录，跳过: ${entry.name}")
+                                            entry = tarIn.nextEntry; continue
+                                        }
+                                    }
+                                    targetFile.exists() -> targetFile.delete()
+                                }
                                 targetFile.parentFile?.mkdirs()
                                 var symlinkTarget = entry.linkName
                                 if (symlinkTarget.startsWith("/")) {
@@ -478,11 +493,20 @@ object ProotManager {
             val isRealDir = link.exists() && !isSymlink
 
             if (isRealDir) {
-                // 【关键修复】不再直接删除真实目录！
-                // 真实目录可能包含从 tar 解压出来的文件（非 usr-merge 布局的包）
-                // 只有当目标目录里已经有完整内容时，才安全地用软链接替换
-                Log.d(TAG, "保留真实目录 $name，不替换为软链接，以避免文件丢失")
-                continue
+                val children = link.listFiles()
+                if (children == null || children.isEmpty()) {
+                    // 空目录（tar 解压时的占位残留），安全替换为软链接
+                    val deleted = link.delete()
+                    if (!deleted) {
+                        Log.w(TAG, "无法删除空目录 $name，跳过软链接创建")
+                        continue
+                    }
+                    Log.d(TAG, "已删除空目录 $name，准备创建软链接")
+                } else {
+                    // 非空真实目录：包含从 tar 解压出来的文件，保留以免丢失数据
+                    Log.d(TAG, "保留非空真实目录 $name (${children.size} 个子项)，不替换为软链接")
+                    continue
+                }
             }
 
             if (!isSymlink && !link.exists()) {
@@ -537,7 +561,10 @@ object ProotManager {
     }
 
     private fun getStableTmpDir(context: Context): File {
-        val dir = File(context.filesDir.canonicalFile, "pr_tmp").canonicalFile
+        // 【修复】使用 absolutePath 而非 canonicalFile，避免 /data/data 与 /data/user/0 路径歧义
+        // proot 原生进程使用系统原始路径，canonicalFile 解析后可能与 proot 内部路径不一致，
+        // 导致 PROOT_TMP_DIR 指向的目录与 proot 实际写入 chmod 的路径不匹配
+        val dir = File(context.filesDir.absolutePath, "pr_tmp")
         if (!dir.exists()) {
             dir.mkdirs()
         }
@@ -563,7 +590,7 @@ object ProotManager {
         val nativeDir = File(context.applicationInfo.nativeLibraryDir).canonicalPath
         val ldPath    = "$libsDir:$nativeDir"
 
-        val stableTmp = getStableTmpDir(context).canonicalFile
+        val stableTmp = getStableTmpDir(context)
 
         return ProcessBuilder(cmd).apply {
             val env = environment()
@@ -592,9 +619,9 @@ object ProotManager {
             env["PATH"]            = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/system/xbin"
             env["LD_LIBRARY_PATH"] = ldPath
             
-            // 3. 核心修复：临时物理路径强制规范化隔离
-            env["PROOT_TMP_DIR"]   = stableTmp.canonicalPath
-            env["TMPDIR"]          = stableTmp.canonicalPath
+            // 3. 核心修复：临时目录使用 absolutePath，与 proot 原生进程路径表示保持一致
+            env["PROOT_TMP_DIR"]   = stableTmp.absolutePath
+            env["TMPDIR"]          = stableTmp.absolutePath
             
             // 4. 清除 LD_PRELOAD
             env.remove("LD_PRELOAD")
