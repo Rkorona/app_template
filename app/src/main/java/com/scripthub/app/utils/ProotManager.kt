@@ -176,9 +176,6 @@ object ProotManager {
 
     /**
      * 解压/安装后的最小完整性校验：只检查"缺了就根本没法启动 shell"的几个关键文件。
-     * tar 解压遇到部分条目失败时常常只返回 exit code 1（之前被当成警告放过），
-     * 加上下载被打断也可能漏掉文件——不在安装阶段把这些拦住，
-     * 用户只会在真正点进 Shell 终端的那一刻才看到 execve 报错，定位成本很高。
      */
     private fun verifyCriticalBinaries(rootfsDir: File): List<String> {
         val mustHave = mapOf(
@@ -260,8 +257,6 @@ object ProotManager {
             }
         }
 
-        // 下载完整性校验：网络中断时 read() 会直接返回 -1 提前结束循环，
-        // 之前这里不校验的话，一个下载到一半的 tar.xz 会被当成"下载成功"直接送去解压
         if (total > 0 && downloaded != total) {
             dest.delete()
             throw IOException("下载不完整: 期望 $total 字节，实际收到 $downloaded 字节，网络可能中断了，请重试")
@@ -388,10 +383,6 @@ object ProotManager {
 
     /**
      * 构建 Proot 命令行
-     *
-     * 【重要修复】
-     * 1. 挂载系统的 /system、/vendor 目录外，增加挂载 /apex 目录！
-     * 在 Android 10+ 平台上，Bionic 的动态链接器(linker)移到了 APEX 模块中，不挂载 /apex 会导致容器程序找不到动态连接器而报错 execve 找不到文件！
      */
     fun buildProotCommand(
         context: Context,
@@ -414,7 +405,7 @@ object ProotManager {
             "-b", "/vendor:/vendor"
         )
 
-        // 核心修复1：检测并挂载 /apex，解决 Android 10+ 底层 runtime linker 依赖问题
+        // 检测并挂载 /apex，解决 Android 10+ 底层 runtime linker 依赖问题
         val apexDir = File("/apex")
         if (apexDir.exists()) {
             commands.add("-b")
@@ -446,9 +437,12 @@ object ProotManager {
     /**
      * 返回配置好运行环境的 ProcessBuilder
      *
-     * 【核心升级：彻底移除干扰】
-     * 1. 彻底清空宿主机注入的任何 LD_PRELOAD（包括 libandroid-shmem.so），避免动态链接命名空间隔离导致容器的 bin 崩溃。
-     * 2. 清理并设置纯净的环境变量环境。
+     * 【修复细节说明】
+     * 1. 绝对不能使用 environment().clear() 完全擦除环境。
+     * Android 系统 Bionic linker 和 SELinux 机制高度依赖 ANDROID_* 等底层变量。
+     * 2. 我们通过过滤、保留白名单的方式清理宿主机变量。
+     * 3. 必须在 LD_LIBRARY_PATH 以及 PATH 中保留 Android 系统的原生支持。
+     * 4. 修复 Temp 目录并发清理 Bug：不采用暴力 deleteRecursively 清理，避免多进程运行冲突。
      */
     fun buildProotProcess(
         context: Context,
@@ -462,28 +456,42 @@ object ProotManager {
         val ldPath    = "$libsDir:$nativeDir"
 
         val stableTmp = getStableTmpDir(context)
-        try {
-            stableTmp.listFiles()?.forEach { it.deleteRecursively() }
-        } catch (_: Exception) {}
 
         return ProcessBuilder(cmd).apply {
-            // 清理宿主机继承的所有环境变量（包括宿主机 APP 自带的、继承自 Android 进程的脏参数）
-            environment().clear()
+            // 获取原生环境，进行【选择性过滤】而非直接彻底 clear()
+            val env = environment()
             
-            // 重新填入纯净的基础系统环境变量
-            environment()["HOME"]            = "/root"
-            environment()["TERM"]            = "xterm-256color"
-            environment()["LANG"]            = "C.UTF-8"
-            environment()["PATH"]            = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            environment()["LD_LIBRARY_PATH"] = ldPath
+            // 备份需要保留的 Android 核心系统环境变量
+            val preservedEnv = mutableMapOf<String, String>()
+            val keepKeys = listOf(
+                "ANDROID_ROOT", "ANDROID_DATA", "ANDROID_RUNTIME_ROOT",
+                "ANDROID_TZDATA_ROOT", "ANDROID_I18N_ROOT", "BOOTCLASSPATH"
+            )
+            for (key in keepKeys) {
+                env[key]?.let { preservedEnv[key] = it }
+            }
+
+            // 清空环境（防止 Termux 等外部环境变量污染）
+            env.clear()
+
+            // 1. 恢复 Android 必需的核心环境变量
+            env.putAll(preservedEnv)
             
-            // 临时目录环境强制隔离，不要受 Android 全局环境变量干扰
-            environment()["PROOT_TMP_DIR"]   = stableTmp.absolutePath
-            environment()["TMPDIR"]          = stableTmp.absolutePath
+            // 2. 注入 PRoot 容器隔离环境变量
+            env["HOME"]            = "/root"
+            env["TERM"]            = "xterm-256color"
+            env["LANG"]            = "C.UTF-8"
             
-            // 【核心修复2】坚决不能使用 LD_PRELOAD 注入 libandroid-shmem.so！
-            // 在高版本 Android 系统下，跨隔离域的 .so 预加载到外部程序内部会引发 linker 解析崩溃。
-            // 我们不传 LD_PRELOAD，让 proot 自身通过底层指令拦截实现翻译。
+            // PATH 必须同时包含：容器 PATH 和 宿主机 PATH (确保 proot 能调用本机命令比如 chmod)
+            env["PATH"]            = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/system/bin:/system/xbin"
+            env["LD_LIBRARY_PATH"] = ldPath
+            
+            // 3. 核心修复：临时目录环境强制隔离，并让 PRoot 获取读写及 Socket 创建权限
+            env["PROOT_TMP_DIR"]   = stableTmp.absolutePath
+            env["TMPDIR"]          = stableTmp.absolutePath
+            
+            // 4. 清除 LD_PRELOAD。
+            env.remove("LD_PRELOAD")
         }
     }
 
