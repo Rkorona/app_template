@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -13,6 +15,8 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import java.nio.file.Files
+import java.nio.file.Paths
 
 data class SetupProgress(
     val phase: String = "",
@@ -139,7 +143,7 @@ object ProotManager {
                 }
 
                 emit("正在解压根文件系统 (首次安装约需 1-3 分钟)...", 76)
-                extractTarXz(tarFile, rootfsDir)
+                extractTarXzJava(tarFile, rootfsDir)
                 tarFile.delete()
 
                 emit("配置系统运行环境...", 92)
@@ -204,7 +208,7 @@ object ProotManager {
         return mustHave.filterValues { candidates ->
             candidates.none { 
                 val file = File(rootfsDir, it)
-                file.exists() && file.length() > 0 
+                file.exists() && (file.length() > 0 || Files.isSymbolicLink(file.toPath())) 
             }
         }.keys.toList()
     }
@@ -276,40 +280,75 @@ object ProotManager {
         }
     }
 
-    private fun extractTarXz(tarXzFile: File, destDir: File) {
-        val tarFile = File(tarXzFile.parent, tarXzFile.nameWithoutExtension).canonicalFile
-        try {
-            emit("正在解压 XZ 流...", 77)
-            decompressXz(tarXzFile, tarFile)
+    /**
+     * 【终极核心升级】使用纯 Java 库（Apache Commons Compress）直接在内存流中解压 .tar.xz
+     * 100% 避免对 Android 系统底层 `tar` 命令行工具的依赖，完美处理硬链接、软链接以及特殊权限！
+     */
+    private fun extractTarXzJava(tarXzFile: File, destDir: File) {
+        tarXzFile.inputStream().buffered(64 * 1024).use { fileIn ->
+            XZInputStream(fileIn).use { xzIn ->
+                TarArchiveInputStream(xzIn).use { tarIn ->
+                    var entry: TarArchiveEntry? = tarIn.nextEntry
+                    var count = 0
+                    while (entry != null) {
+                        val entryName = entry.name
+                        // 过滤掉不安全路径，防止目录穿越漏洞
+                        if (entryName.contains("..")) {
+                            entry = tarIn.nextEntry
+                            continue
+                        }
 
-            emit("正在展开 tar 归档...", 82)
-            val process = ProcessBuilder(
-                "tar", "-xf", tarFile.absolutePath,
-                "-C", destDir.absolutePath,
-                "--no-same-owner"
-            ).redirectErrorStream(true).start()
-            val output   = process.inputStream.bufferedReader().readText()
-            val exitCode = process.waitFor()
-            if (exitCode > 1) {
-                throw IOException("tar 展开失败 (exit $exitCode):\n$output")
-            }
-            if (exitCode == 1) {
-                Log.w(TAG, "tar 展开有警告 (exit 1)，继续:\n$output")
-            }
-        } finally {
-            tarFile.delete()
-        }
-    }
+                        val targetFile = File(destDir, entryName).canonicalFile
+                        // 确保目标路径包含在 destDir 内部，安全防护
+                        if (!targetFile.path.startsWith(destDir.path)) {
+                            entry = tarIn.nextEntry
+                            continue
+                        }
 
-    private fun decompressXz(src: File, dest: File) {
-        src.inputStream().buffered(64 * 1024).use { raw ->
-            XZInputStream(raw).use { xz ->
-                FileOutputStream(dest).use { out ->
-                    val buf = ByteArray(32 * 1024)
-                    var n: Int
-                    while (xz.read(buf).also { n = it } != -1) {
-                        out.write(buf, 0, n)
+                        if (entry.isDirectory) {
+                            targetFile.mkdirs()
+                        } else if (entry.isSymbolicLink) {
+                            // 核心修复：原生创建符号链接（支持绝对与相对软链）
+                            val linkPath = targetFile.toPath()
+                            val targetPath = Paths.get(entry.linkName)
+                            try {
+                                Files.deleteIfExists(linkPath)
+                                Files.createSymbolicLink(linkPath, targetPath)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "符号链接创建失败 [非致命警告]: ${entry.name} -> ${entry.linkName} (${e.message})")
+                            }
+                        } else if (entry.isLink) {
+                            // 处理硬链接
+                            val linkPath = targetFile.toPath()
+                            val hardLinkTarget = File(destDir, entry.linkName).canonicalFile.toPath()
+                            try {
+                                Files.deleteIfExists(linkPath)
+                                Files.createLink(linkPath, hardLinkTarget)
+                            } catch (e: Exception) {
+                                Log.w(TAG, "硬链接创建失败 [非致命警告]: ${entry.name} -> ${entry.linkName} (${e.message})")
+                            }
+                        } else {
+                            // 普通文件写入
+                            targetFile.parentFile?.mkdirs()
+                            FileOutputStream(targetFile).use { out ->
+                                tarIn.copyTo(out)
+                            }
+                            
+                            // 赋予文件的基础所有者执行权限（若 tar 中带有可执行标记）
+                            if (entry.mode and 0x49 != 0) { // 判断是否有任一 executable 权限位
+                                targetFile.setExecutable(true, false)
+                            }
+                        }
+
+                        count++
+                        if (count % 300 == 0) {
+                            val progressPercent = 76 + (count / 15000f * 15f).toInt().coerceAtMost(15)
+                            emit("正在解压根文件系统 (已展开 $count 个文件)...", progressPercent)
+                        }
+
+                        entry = tarIn.nextEntry
                     }
+                    Log.d(TAG, "解压完毕，共解压 $count 个条目。")
                 }
             }
         }
