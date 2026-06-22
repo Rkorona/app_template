@@ -569,10 +569,29 @@ object ProotManager {
             }
         }
 
+        // 【核心修复】直接将 ELF 动态链接器实体文件绑定到 /lib/ld-linux-aarch64.so.1。
+        // 问题根源：proot 通过 -b usr/lib:/lib 绑定后，跟踪该目录内的相对软链接
+        // ld-linux-aarch64.so.1 -> aarch64-linux-gnu/ld-linux-aarch64.so.1 时，
+        // 路径计算会出错导致 execve("/usr/bin/bash") 报告 No such file or directory。
+        // 直接文件级绑定彻底绕过软链接解析，proot 可以直接加载 ELF 解释器实体文件。
+        val ldLinuxCandidates = listOf(
+            "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+            "lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+            "usr/lib64/ld-linux-aarch64.so.1",
+            "lib64/ld-linux-aarch64.so.1"
+        )
+        for (relPath in ldLinuxCandidates) {
+            val file = File(rootfsDir, relPath)
+            if (file.exists() && !java.nio.file.Files.isSymbolicLink(file.toPath())) {
+                commands.addAll(listOf("-b", "${file.absolutePath}:/lib/ld-linux-aarch64.so.1"))
+                Log.d(TAG, "ELF 解释器直接绑定: $relPath -> /lib/ld-linux-aarch64.so.1")
+                break
+            }
+        }
+
         commands.addAll(listOf(
             "-b", "$scriptsDir:/data/scripts",
             "-w", "/root",
-            // 【使用绝对路径 /usr/bin/bash】：不再依赖 bin->usr/bin 软链接来查找 bash
             "/usr/bin/bash", "--login", "-c", bashCommand
         ))
 
