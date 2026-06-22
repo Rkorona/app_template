@@ -55,7 +55,20 @@ object ProotManager {
 
     fun isDistroInstalled(context: Context, distro: DistroType): Boolean {
         val dir = getRootfsDir(context, distro)
-        return dir.exists() && File(dir, "bin/bash").exists()
+        if (!dir.exists()) return false
+
+        val marker = File(dir, ".scripthub_installed")
+        if (marker.exists()) return true
+
+        // 迁移：旧版安装没有标记文件，检测到 usr/bin 目录即认为已安装，补写标记
+        val usrBin = File(dir, "usr/bin")
+        if (usrBin.exists() && (usrBin.listFiles()?.isNotEmpty() == true)) {
+            Log.d(TAG, "迁移：检测到已有 rootfs，补写 .scripthub_installed")
+            try { marker.createNewFile() } catch (_: Exception) {}
+            return true
+        }
+
+        return false
     }
 
     suspend fun setup(context: Context, distro: DistroType) = withContext(Dispatchers.IO) {
@@ -394,6 +407,9 @@ object ProotManager {
         // Debian/Ubuntu UsrMerge：/bin /sbin /lib /lib64 均为指向 usr/* 的符号链接。
         // Android tar 无法创建这些链接（Permission denied），在此用 Java 补全。
         fixUsrMergeSymlinks(rootfsDir)
+
+        // 写入安装完成标记（isDistroInstalled 依赖此文件，不依赖 bin/bash）
+        File(rootfsDir, ".scripthub_installed").createNewFile()
     }
 
     /**
