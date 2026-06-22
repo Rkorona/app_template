@@ -173,13 +173,9 @@ object ProotManager {
     /**
      * 抓取 LXC 镜像目录的 HTML 列表，解析出最新的日期目录名（如 20260621_22:32），
      * 返回拼接好的 rootfs.tar.xz 完整下载链接。
-     *
-     * 目录列表中链接格式：<a href="20260621_22%3A32/">20260621_22:32/</a>
-     * 日期格式 YYYYMMDD_HH:MM 可直接按字典序排最大值取最新。
      */
     private fun fetchLatestRootfsUrl(baseUrl: String): String {
         val html = httpGetText(baseUrl)
-        // 匹配 href 里形如 "20260621_22%3A32/" 或 "20260621_22:32/" 的目录链接
         val regex = Regex("""href="(\d{8}_\d{2}(?:%3A|:)\d{2})/?"""")
         val entries = regex.findAll(html)
             .map { it.groupValues[1] }
@@ -189,9 +185,7 @@ object ProotManager {
             throw IOException("无法从目录列表解析到镜像版本: $baseUrl")
         }
 
-        // 统一将 %3A 替换为 : 后按字典序取最大（最新）
         val latest = entries.maxByOrNull { it.replace("%3A", ":") }!!
-        // 拼接时保留原始编码（%3A），避免 URL 二次编码问题
         return "${baseUrl}${latest}/rootfs.tar.xz"
     }
 
@@ -241,7 +235,6 @@ object ProotManager {
 
     /**
      * 解压 .tar.xz：先用 Java XZ 库解压成 .tar，再用系统 tar 提取。
-     * Android 系统 tar 不包含 xz 支持（-J 标志会报 "exec xz: No such file"）。
      */
     private fun extractTarXz(tarXzFile: File, destDir: File) {
         val tarFile = File(tarXzFile.parent, tarXzFile.nameWithoutExtension)
@@ -253,12 +246,10 @@ object ProotManager {
             val process = ProcessBuilder(
                 "tar", "-xf", tarFile.absolutePath,
                 "-C", destDir.absolutePath,
-                "--no-same-owner"          // 跳过 chown，Android 无 root 时会 Permission denied
+                "--no-same-owner"
             ).redirectErrorStream(true).start()
             val output   = process.inputStream.bufferedReader().readText()
             val exitCode = process.waitFor()
-            // exit 1 = 有警告（硬链接/symlink 部分失败），不是致命错误
-            // exit 2 = 真正的致命错误（如磁盘满、文件不可读）
             if (exitCode > 1) {
                 throw IOException("tar 展开失败 (exit $exitCode):\n$output")
             }
@@ -270,10 +261,6 @@ object ProotManager {
         }
     }
 
-    /**
-     * 用 Java XZInputStream 把 .xz 文件解压为原始字节流写入 dest。
-     * 不依赖任何系统命令。
-     */
     private fun decompressXz(src: File, dest: File) {
         src.inputStream().buffered(64 * 1024).use { raw ->
             XZInputStream(raw).use { xz ->
@@ -289,7 +276,6 @@ object ProotManager {
     }
 
     private fun configureRootfs(context: Context, rootfsDir: File, distro: DistroType) {
-        // 强制确保目录存在：mkdirs() 对已存在目录返回 false 但不报错，用 exists() 兜底
         fun ensureDir(path: String): File {
             val dir = File(rootfsDir, path)
             if (!dir.exists()) {
@@ -307,14 +293,14 @@ object ProotManager {
         ensureDir("tmp")
         ensureDir("data/scripts")
 
-        // resolv.conf：DNS 配置，非致命，写失败仅记录警告
+        // resolv.conf：DNS 配置
         try {
             val resolvConf = File(rootfsDir, "etc/resolv.conf")
             if (!resolvConf.exists() || resolvConf.length() == 0L) {
                 resolvConf.writeText("nameserver 8.8.8.8\nnameserver 8.8.4.4\n")
             }
         } catch (e: Exception) {
-            Log.w(TAG, "resolv.conf 写入失败（非致命）: ${e.message}")
+            Log.w(TAG, "resolv.conf 写入失败: ${e.message}")
         }
 
         // 环境变量脚本
@@ -329,24 +315,20 @@ object ProotManager {
                 """.trimIndent()
             )
         } catch (e: Exception) {
-            Log.w(TAG, "scripthub.sh 写入失败（非致命）: ${e.message}")
+            Log.w(TAG, "scripthub.sh 写入失败: ${e.message}")
         }
 
-        // Debian/Ubuntu UsrMerge：/bin /sbin /lib /lib64 均为指向 usr/* 的符号链接。
-        // Android tar 无法创建这些链接（Permission denied），在此用 Java 补全。
+        // 修复 UsrMerge 符号链接
         fixUsrMergeSymlinks(rootfsDir)
 
-        // 写入安装完成标记（isDistroInstalled 依赖此文件，不依赖 bin/bash）
+        // 写入安装完成标记
         File(rootfsDir, ".scripthub_installed").createNewFile()
     }
 
     /**
-     * 补全 Debian UsrMerge 规定的顶层符号链接。
-     * 如果 tar 已经成功创建了真实目录，则跳过（不覆盖）。
-     * 链接值均为相对路径，与 rootfs 内逻辑一致。
+     * 修复 UsrMerge 符号链接
      */
     private fun fixUsrMergeSymlinks(rootfsDir: File) {
-        // 格式：链接名 → 链接目标（相对 rootfsDir）
         val links = mapOf(
             "bin"    to "usr/bin",
             "sbin"   to "usr/sbin",
@@ -358,20 +340,32 @@ object ProotManager {
         for ((name, target) in links) {
             val link = File(rootfsDir, name)
             val targetDir = File(rootfsDir, target)
-            // 目标存在且链接不存在（tar 跳过了）→ 补建
-            if (targetDir.exists() && !link.exists()) {
-                try {
-                    val path = link.toPath()
-                    val targetPath = java.nio.file.Paths.get(target)
-                    java.nio.file.Files.createSymbolicLink(path, targetPath)
-                    Log.d(TAG, "补建 UsrMerge symlink: $name → $target")
-                } catch (e: Exception) {
-                    Log.w(TAG, "symlink $name → $target 创建失败: ${e.message}")
+            if (targetDir.exists()) {
+                // 如果 link 是一个真实的普通目录（解压时失败退化成的普通目录），先删除它，以便重建符号链接
+                if (link.exists() && !java.nio.file.Files.isSymbolicLink(link.toPath())) {
+                    Log.w(TAG, "检测到本应为符号链接的普通目录: ${link.absolutePath}，正在清理以重建链接")
+                    link.deleteRecursively()
+                }
+                
+                if (!link.exists()) {
+                    try {
+                        val path = link.toPath()
+                        val targetPath = java.nio.file.Paths.get(target)
+                        java.nio.file.Files.createSymbolicLink(path, targetPath)
+                        Log.d(TAG, "补建 UsrMerge symlink: $name → $target")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "symlink $name → $target 创建失败: ${e.message}")
+                    }
                 }
             }
         }
     }
 
+    /**
+     * 构建 Proot 命令行。
+     * 1. 修复：追加了 "-b", "/system:/system" 挂载，这对于 ELF 在 Android 环境下解析 linker 极为重要。
+     * 2. 修复：挂载当前应用临时目录到容器内，避免容器尝试读写 termux 的硬编码临时目录。
+     */
     fun buildProotCommand(
         context: Context,
         distro: DistroType,
@@ -380,6 +374,9 @@ object ProotManager {
         val prootBin   = getProotBin(context).absolutePath
         val rootfsPath = getRootfsDir(context, distro).absolutePath
         val scriptsDir = "/sdcard/QLPanel/scripts"
+        
+        // 容器内 tmp 挂载至应用内部 cache 目录下新建的 proot-tmp，确保 proot 具有完全读写权
+        val hostTmpDir = File(context.cacheDir, "proot-tmp").also { it.mkdirs() }
 
         return listOf(
             prootBin,
@@ -389,6 +386,8 @@ object ProotManager {
             "-b", "/proc:/proc",
             "-b", "/dev:/dev",
             "-b", "/sys:/sys",
+            "-b", "/system:/system",                  // 核心修复1：必须挂载 Android 系统分区
+            "-b", "${hostTmpDir.absolutePath}:/tmp",  // 核心修复2：重定向临时目录挂载
             "-b", "$scriptsDir:/data/scripts",
             "-w", "/root",
             "/bin/bash", "--login", "-c", bashCommand
@@ -396,9 +395,8 @@ object ProotManager {
     }
 
     /**
-     * 返回配置好运行环境的 ProcessBuilder，调用方只需 .start()。
-     * 自动处理 LD_LIBRARY_PATH（包含 libtalloc.so.2 所在目录），
-     * 避免 "CANNOT LINK EXECUTABLE: libtalloc.so.2 not found" 错误。
+     * 返回配置好运行环境的 ProcessBuilder。
+     * 1. 修复：显式添加 PROOT_TMP_DIR 环境变量，避免 proot 内部尝试去 canonicalize 找不到的 Termux 路径。
      */
     fun buildProotProcess(
         context: Context,
@@ -411,10 +409,11 @@ object ProotManager {
         val nativeDir = context.applicationInfo.nativeLibraryDir
         val ldPath    = "$libsDir:$nativeDir"
 
-        // libandroid-shmem.so 为 proot 提供 Android 缺失的 shmget/shmat 共享内存接口，
-        // 缺少它时 proot 无法正确拦截 execve，导致 ELF 解释器找不到。
         val shmemLib  = File(nativeDir, "libandroid-shmem.so")
         val ldPreload = if (shmemLib.exists()) shmemLib.absolutePath else ""
+
+        // 新建并指向本应用的缓存临时目录
+        val hostTmpDir = File(context.cacheDir, "proot-tmp").also { it.mkdirs() }
 
         return ProcessBuilder(cmd).apply {
             environment()["HOME"]            = "/root"
@@ -423,23 +422,19 @@ object ProotManager {
             environment()["PATH"]            =
                 "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             environment()["LD_LIBRARY_PATH"] = ldPath
+            
+            // 核心修复3：强行改写 PROOT 自身的临时工作路径，避免其寻找 /data/data/com.termux/...
+            environment()["PROOT_TMP_DIR"]   = hostTmpDir.absolutePath
+            
             if (ldPreload.isNotEmpty()) {
                 environment()["LD_PRELOAD"] = ldPreload
             }
         }
     }
 
-    /**
-     * proot 依赖的 libtalloc.so.2 存放目录（App 私有，可写）。
-     * 运行时通过 LD_LIBRARY_PATH 指向此目录。
-     */
     private fun getProotLibsDir(context: Context): File =
         File(context.noBackupFilesDir, "proot-libs").also { it.mkdirs() }
 
-    /**
-     * 确保 libtalloc.so.2 已从 assets 提取到 proot-libs 目录。
-     * 幂等操作，多次调用安全。
-     */
     fun ensureTallocLib(context: Context) {
         val dest = File(getProotLibsDir(context), "libtalloc.so.2")
         if (dest.exists() && dest.length() > 0L) return
@@ -453,10 +448,6 @@ object ProotManager {
         }
     }
 
-    /**
-     * 不重装 rootfs，只修复符号链接 + 配置文件 + 诊断关键文件是否存在。
-     * 返回诊断报告字符串。
-     */
     suspend fun repairEnvironment(context: Context, distro: DistroType): String =
         withContext(Dispatchers.IO) {
             val rootfsDir = getRootfsDir(context, distro)
@@ -479,7 +470,6 @@ object ProotManager {
             sb.appendLine()
             sb.appendLine("── 诊断结果 ──")
 
-            // 关键文件检测
             data class Check(val label: String, val candidates: List<String>)
             val checks = listOf(
                 Check("bash",        listOf("usr/bin/bash", "bin/bash")),
@@ -511,8 +501,6 @@ object ProotManager {
         }
 }
 
-// ─── InputStream 扩展工具 ────────────────────────────────────────────────────
-
 private fun InputStream.readNBytes(n: Int): ByteArray {
     val buf = ByteArray(n)
     var offset = 0
@@ -523,4 +511,3 @@ private fun InputStream.readNBytes(n: Int): ByteArray {
     }
     return buf
 }
-
