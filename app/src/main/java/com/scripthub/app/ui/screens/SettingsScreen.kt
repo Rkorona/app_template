@@ -131,14 +131,14 @@ fun SettingsScreen(
                     Spacer(Modifier.width(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text       = "proot + ${distro.displayName}",
+                            text       = "PRoot",
                             style      = MaterialTheme.typography.bodyLarge,
                             fontWeight = FontWeight.Bold,
                             color      = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            text  = if (isReady) "运行环境已就绪 · 点击管理或切换发行版"
-                                    else "⚠ 尚未安装 · 点击立即安装",
+                            text  = if (isReady) "${distro.displayName} · 运行环境已就绪"
+                                    else "⚠ 尚未安装 · 点击立即配置",
                             style = MaterialTheme.typography.bodyMedium,
                             color = if (isReady) MaterialTheme.colorScheme.onSurfaceVariant
                                     else MaterialTheme.colorScheme.error

@@ -26,6 +26,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.scripthub.app.data.DependencyEntity
 import com.scripthub.app.viewmodel.ConfigViewModel
 import com.scripthub.app.ui.theme.TerminalSuccess
+import com.scripthub.app.ui.components.DepInstallConsoleBottomSheet
 import java.util.UUID
 
 // 枚举保留
@@ -43,8 +44,9 @@ fun DependencyManagerScreen(
     val deps by viewModel.depsList.collectAsStateWithLifecycle()
 
     // ─── 依赖安装配置弹窗状态 ───
-    var showInstaller by remember { mutableStateOf(false) }
-    var editingDep by remember { mutableStateOf<DependencyEntity?>(null) }
+    var showInstaller  by remember { mutableStateOf(false) }
+    var editingDep     by remember { mutableStateOf<DependencyEntity?>(null) }
+    var installingDep  by remember { mutableStateOf<DependencyEntity?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(top = contentPadding.calculateTopPadding())) {
@@ -151,13 +153,23 @@ fun DependencyManagerScreen(
     // ─── 依赖安装/配置弹窗 ───
     if (showInstaller) {
         DependencyInstallerSheet(
-            existing = editingDep,
+            existing    = editingDep,
             defaultType = selectedTab,
-            onDismiss = { showInstaller = false },
-            onSave = { savedDep ->
+            onDismiss   = { showInstaller = false },
+            onSave      = { savedDep ->
                 viewModel.installDependency(savedDep)
+                installingDep = savedDep
                 showInstaller = false
             }
+        )
+    }
+
+    // ─── 实时安装输出 Sheet ───
+    installingDep?.let { dep ->
+        DepInstallConsoleBottomSheet(
+            dep       = dep,
+            viewModel = viewModel,
+            onDismiss = { installingDep = null }
         )
     }
 }

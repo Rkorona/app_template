@@ -1,7 +1,6 @@
 package com.scripthub.app.viewmodel
 
 import android.app.Application
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.scripthub.app.data.AppDatabase
@@ -9,14 +8,10 @@ import com.scripthub.app.data.DependencyEntity
 import com.scripthub.app.data.EnvVarEntity
 import com.scripthub.app.ui.screens.DepStatus
 import com.scripthub.app.ui.screens.DepType
-import com.scripthub.app.utils.DistroPreference
-import com.scripthub.app.utils.ProotManager
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class ConfigViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
@@ -52,49 +47,22 @@ class ConfigViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch { depDao.delete(dep) }
     }
 
-    /**
-     * 真正执行依赖安装：先写入 Installing 状态，然后在 proot 容器中运行安装命令，
-     * 最终将结果（Installed / Failed）更新回数据库。
-     */
+    /** 先将依赖写入数据库并标记为「安装中」，实际安装由 DepInstallConsoleBottomSheet 执行 */
     fun installDependency(dep: DependencyEntity) {
-        val context = getApplication<Application>()
         viewModelScope.launch {
-            val installing = dep.copy(status = DepStatus.Installing)
-            depDao.insert(installing)
-
-            withContext(Dispatchers.IO) {
-                try {
-                    val distro = DistroPreference.getDistro(context)
-
-                    if (!ProotManager.isDistroInstalled(context, distro)) {
-                        depDao.update(installing.copy(status = DepStatus.Failed))
-                        return@withContext
-                    }
-
-                    val cmd = buildInstallCommand(dep)
-                    Log.d("DepInstall", "执行安装命令: $cmd")
-
-                    val process = ProotManager.buildProotProcess(context, distro, cmd)
-                        .redirectErrorStream(true)
-                        .start()
-
-                    val output = process.inputStream.bufferedReader().use { it.readText() }
-                    val exitCode = process.waitFor()
-
-                    Log.d("DepInstall", "安装输出:\n$output\n退出码: $exitCode")
-
-                    val finalStatus = if (exitCode == 0) DepStatus.Installed else DepStatus.Failed
-                    depDao.update(installing.copy(status = finalStatus))
-
-                } catch (e: Exception) {
-                    Log.e("DepInstall", "安装异常", e)
-                    depDao.update(installing.copy(status = DepStatus.Failed))
-                }
-            }
+            depDao.insert(dep.copy(status = DepStatus.Installing))
         }
     }
 
-    private fun buildInstallCommand(dep: DependencyEntity): String {
+    /** 安装结束后由 Sheet 回调更新最终状态 */
+    fun updateDepStatus(dep: DependencyEntity, status: DepStatus) {
+        viewModelScope.launch {
+            depDao.update(dep.copy(status = status))
+        }
+    }
+
+    /** 根据依赖类型构造对应包管理器的安装命令 */
+    fun buildInstallCommand(dep: DependencyEntity): String {
         val ver = dep.version.trim()
         val hasVersion = ver.isNotEmpty() && ver != "latest"
         return when (dep.type) {
