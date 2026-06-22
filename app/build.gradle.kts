@@ -60,6 +60,9 @@ dependencies {
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.10.1")
 
+    // XZ 解压（Android 系统 tar 不含 xz，需纯 Java 实现）
+    implementation("org.tukaani:xz:1.9")
+
     // Splash Screen API (backport to Android 10+)
     implementation("androidx.core:core-splashscreen:1.0.1")
 

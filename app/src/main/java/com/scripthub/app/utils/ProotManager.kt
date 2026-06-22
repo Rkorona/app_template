@@ -7,6 +7,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.withContext
+import org.tukaani.xz.XZInputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -145,22 +146,28 @@ object ProotManager {
         extractArMember(debFile, "data.tar", dataTarXz)
         debFile.delete()
 
-        // 4. 从 data.tar.xz 中提取 proot 二进制
-        emit("正在提取 proot 二进制...", 14)
+        // 4. 解压 data.tar.xz → data.tar（Java XZ 库，无需系统 xz 命令）
+        emit("正在解压 proot 数据包...", 14)
+        val dataTar = File(context.cacheDir, "proot-data.tar")
+        decompressXz(dataTarXz, dataTar)
+        dataTarXz.delete()
+
+        // 5. 从 data.tar 中提取 proot 二进制（普通 tar，无 -J）
+        emit("正在提取 proot 二进制...", 16)
         val prootDir = File(context.filesDir, "proot").also { it.mkdirs() }
         val prootBin = File(prootDir, "proot")
 
         // 路径: ./data/data/com.termux/files/usr/bin/proot → 7 层目录前缀
         val binPath = "./data/data/com.termux/files/usr/bin/proot"
         val process = ProcessBuilder(
-            "tar", "-xJf", dataTarXz.absolutePath,
+            "tar", "-xf", dataTar.absolutePath,
             "-C", prootDir.absolutePath,
             "--strip-components=7",
             binPath
         ).redirectErrorStream(true).start()
         val output   = process.inputStream.bufferedReader().readText()
         val exitCode = process.waitFor()
-        dataTarXz.delete()
+        dataTar.delete()
 
         if (exitCode != 0 || !prootBin.exists()) {
             throw IOException("proot 二进制提取失败 (exit $exitCode): $output")
@@ -282,16 +289,45 @@ object ProotManager {
         }
     }
 
-    private fun extractTarXz(tarFile: File, destDir: File) {
-        val process = ProcessBuilder(
-            "tar", "-xJf", tarFile.absolutePath, "-C", destDir.absolutePath
-        )
-            .redirectErrorStream(true)
-            .start()
-        val output   = process.inputStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-        if (exitCode != 0) {
-            throw IOException("tar 解压失败 (exit $exitCode):\n$output")
+    /**
+     * 解压 .tar.xz：先用 Java XZ 库解压成 .tar，再用系统 tar 提取。
+     * Android 系统 tar 不包含 xz 支持（-J 标志会报 "exec xz: No such file"）。
+     */
+    private fun extractTarXz(tarXzFile: File, destDir: File) {
+        val tarFile = File(tarXzFile.parent, tarXzFile.nameWithoutExtension)
+        try {
+            emit("正在解压 XZ 流...", 77)
+            decompressXz(tarXzFile, tarFile)
+
+            emit("正在展开 tar 归档...", 82)
+            val process = ProcessBuilder("tar", "-xf", tarFile.absolutePath, "-C", destDir.absolutePath)
+                .redirectErrorStream(true)
+                .start()
+            val output   = process.inputStream.bufferedReader().readText()
+            val exitCode = process.waitFor()
+            if (exitCode != 0) {
+                throw IOException("tar 展开失败 (exit $exitCode):\n$output")
+            }
+        } finally {
+            tarFile.delete()
+        }
+    }
+
+    /**
+     * 用 Java XZInputStream 把 .xz 文件解压为原始字节流写入 dest。
+     * 不依赖任何系统命令。
+     */
+    private fun decompressXz(src: File, dest: File) {
+        src.inputStream().buffered(64 * 1024).use { raw ->
+            XZInputStream(raw).use { xz ->
+                FileOutputStream(dest).use { out ->
+                    val buf = ByteArray(32 * 1024)
+                    var n: Int
+                    while (xz.read(buf).also { n = it } != -1) {
+                        out.write(buf, 0, n)
+                    }
+                }
+            }
         }
     }
 
