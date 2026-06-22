@@ -198,20 +198,28 @@ object ProotManager {
      */
     private fun verifyCriticalBinaries(rootfsDir: File): List<String> {
         val mustHave = mapOf(
-            "bash 可执行文件" to listOf("usr/bin/bash"),
+            "bash 可执行文件" to listOf(
+                "usr/bin/bash",
+                "bin/bash"                          // 非 usr-merge 布局兜底
+            ),
             "动态链接器 ld-linux" to listOf(
                 "usr/lib/ld-linux-aarch64.so.1",
-                "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
+                "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+                "lib/ld-linux-aarch64.so.1",        // 旧式布局 / tar 绝对路径解压到 lib/
+                "lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+                "lib64/ld-linux-aarch64.so.1"
             ),
             "libc" to listOf(
-                "usr/lib/aarch64-linux-gnu/libc.so.6"
+                "usr/lib/aarch64-linux-gnu/libc.so.6",
+                "lib/aarch64-linux-gnu/libc.so.6",  // 旧式布局兜底
+                "lib64/libc.so.6"
             )
         )
         return mustHave.filterValues { candidates ->
             candidates.none { relPath ->
                 val file = File(rootfsDir, relPath)
                 val path = file.toPath()
-                // 实体文件存在，或由于 UsrMerge 产生的软链接本身存在即可
+                // 实体文件存在，或软链接本身存在（即使目标暂时不可解析）
                 file.exists() || Files.isSymbolicLink(path) || Files.exists(path, java.nio.file.LinkOption.NOFOLLOW_LINKS)
             }
         }.keys.toList()
@@ -295,6 +303,7 @@ object ProotManager {
     // 收集解压失败或 target 还不存在的硬链接，留待二阶段处理
         data class DeferredLink(val targetFile: File, val linkName: String)
         val deferredHardLinks = mutableListOf<DeferredLink>()
+        val destCanonical = destDir.canonicalPath
     
         tarXzFile.inputStream().buffered(64 * 1024).use { fileIn ->
             XZInputStream(fileIn).use { xzIn ->
@@ -302,11 +311,18 @@ object ProotManager {
                     var entry: TarArchiveEntry? = tarIn.nextEntry
                     var count = 0
                     while (entry != null) {
-                        val entryName = entry.name
-                        if (entryName.contains("..")) { entry = tarIn.nextEntry; continue }
+                        // 【关键修复】去除条目名开头的 '/' 和 './'，
+                        // Java 的 File(parent, "/abs") 会忽略 parent 导致路径逃逸，
+                        // 导致安全检查 startsWith(destDir) 失败，文件被静默跳过
+                        val entryName = entry.name.trimStart('/').let {
+                            if (it.startsWith("./")) it.substring(2) else it
+                        }
+                        if (entryName.isEmpty() || entryName.contains("..")) { entry = tarIn.nextEntry; continue }
     
                         val targetFile = File(destDir, entryName).canonicalFile
-                        if (!targetFile.path.startsWith(destDir.path)) { entry = tarIn.nextEntry; continue }
+                        // 使用 canonicalPath + 分隔符防止兄弟目录误匹配
+                        if (!targetFile.canonicalPath.startsWith("$destCanonical/") &&
+                            targetFile.canonicalPath != destCanonical) { entry = tarIn.nextEntry; continue }
     
                         if (entry.isDirectory) {
                             targetFile.mkdirs()
@@ -454,21 +470,27 @@ object ProotManager {
             "libx32" to "usr/libx32"
         )
         for ((name, target) in links) {
-            val link = File(rootfsDir, name).canonicalFile
-            val targetDir = File(rootfsDir, target).canonicalFile
-            if (targetDir.exists()) {
-                if (link.exists() && !java.nio.file.Files.isSymbolicLink(link.toPath())) {
-                    Log.w(TAG, "清理普通文件目录，准备重建符号链接: ${link.absolutePath}")
-                    link.deleteRecursively()
-                }
-                
-                if (!link.exists()) {
-                    try {
-                        Os.symlink(target, link.absolutePath)
-                        Log.d(TAG, "补建 UsrMerge symlink: $name → $target")
-                    } catch (e: Exception) {
-                        Log.w(TAG, "symlink $name → $target 创建失败: ${e.message}")
-                    }
+            val link = File(rootfsDir, name)
+            val targetDir = File(rootfsDir, target)
+            if (!targetDir.exists()) continue
+
+            val isSymlink = java.nio.file.Files.isSymbolicLink(link.toPath())
+            val isRealDir = link.exists() && !isSymlink
+
+            if (isRealDir) {
+                // 【关键修复】不再直接删除真实目录！
+                // 真实目录可能包含从 tar 解压出来的文件（非 usr-merge 布局的包）
+                // 只有当目标目录里已经有完整内容时，才安全地用软链接替换
+                Log.d(TAG, "保留真实目录 $name，不替换为软链接，以避免文件丢失")
+                continue
+            }
+
+            if (!isSymlink && !link.exists()) {
+                try {
+                    Os.symlink(target, link.absolutePath)
+                    Log.d(TAG, "补建 UsrMerge symlink: $name → $target")
+                } catch (e: Exception) {
+                    Log.w(TAG, "symlink $name → $target 创建失败: ${e.message}")
                 }
             }
         }
