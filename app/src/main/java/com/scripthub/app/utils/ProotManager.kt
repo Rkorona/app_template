@@ -623,6 +623,7 @@ object ProotManager {
         bashCommand: String
     ): ProcessBuilder {
         ensureTallocLib(context)
+        val prootLoader = ensureProotLoader(context)
 
         // 【自动修复】每次启动 proot 前确保 UsrMerge 软链接正确
         // 处理旧代码安装的 rootfs（lib/ 可能是空目录而非 lib->usr/lib 软链接）
@@ -670,8 +671,15 @@ object ProotManager {
             // 3. 核心修复：临时目录使用 absolutePath，与 proot 原生进程路径表示保持一致
             env["PROOT_TMP_DIR"]   = stableTmp.absolutePath
             env["TMPDIR"]          = stableTmp.absolutePath
-            
-            // 4. 清除 LD_PRELOAD
+
+            // 4. 【根本修复】PROOT_LOADER 是 Termux 版 proot 的必需项。
+            // 项目中的 libproot.so 是 Termux 定制版，内部硬编码寻找
+            // /data/data/com.termux/files/usr/libexec/proot/loader。
+            // 如果未设置 PROOT_LOADER，proot 找不到 loader，所有 execve 调用都会报
+            // "No such file or directory"，这就是 shell 始终无法启动的根本原因。
+            env["PROOT_LOADER"]    = prootLoader
+
+            // 5. 清除 LD_PRELOAD
             env.remove("LD_PRELOAD")
         }
     }
@@ -693,6 +701,29 @@ object ProotManager {
         } catch (e: Exception) {
             Log.e(TAG, "libtalloc.so.2 提取失败: ${e.message}")
         }
+    }
+
+    /**
+     * 提取 proot-loader 到 noBackupFilesDir，返回其绝对路径。
+     * proot（Termux 版）必须通过 PROOT_LOADER 指向此 loader 才能 execve guest 程序。
+     * 没有 loader，任何 execve 都会报 "No such file or directory"。
+     */
+    fun ensureProotLoader(context: Context): String {
+        val dest = File(context.noBackupFilesDir.absolutePath, "proot-loader")
+        if (!dest.exists() || dest.length() == 0L) {
+            try {
+                context.assets.open("proot-loader").use { input ->
+                    dest.outputStream().use { input.copyTo(it) }
+                }
+                Runtime.getRuntime()
+                    .exec(arrayOf("/system/bin/chmod", "755", dest.absolutePath))
+                    .waitFor()
+                Log.d(TAG, "proot-loader 已提取到 ${dest.absolutePath}")
+            } catch (e: Exception) {
+                Log.e(TAG, "proot-loader 提取失败: ${e.message}")
+            }
+        }
+        return dest.absolutePath
     }
 
     suspend fun repairEnvironment(context: Context, distro: DistroType): String =
