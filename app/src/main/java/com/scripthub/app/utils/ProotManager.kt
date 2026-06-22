@@ -34,12 +34,7 @@ object ProotManager {
     val progress: StateFlow<SetupProgress> = _progress
 
     /**
-     * 获取 proot 可执行文件路径，按优先级尝试三条路径：
-     *
-     * 1. nativeLibraryDir/libproot.so  — APK 安装时自动解压，SELinux apk_data_file 域允许执行（首选）
-     * 2. noBackupFilesDir/proot        — 从 assets 复制 + /system/bin/chmod 补 x 位（备用）
-     *
-     * 直接返回最终将使用的路径；isProotReady() 再确认文件是否可执行。
+     * 获取 proot 可执行文件路径
      */
     fun getProotBin(context: Context): File {
         val nativeLib = File(context.applicationInfo.nativeLibraryDir, "libproot.so")
@@ -170,10 +165,6 @@ object ProotManager {
 
     // ─── rootfs URL 解析 ──────────────────────────────────────────────────────
 
-    /**
-     * 抓取 LXC 镜像目录的 HTML 列表，解析出最新的日期目录名（如 20260621_22:32），
-     * 返回拼接好的 rootfs.tar.xz 完整下载链接。
-     */
     private fun fetchLatestRootfsUrl(baseUrl: String): String {
         val html = httpGetText(baseUrl)
         val regex = Regex("""href="(\d{8}_\d{2}(?:%3A|:)\d{2})/?"""")
@@ -233,9 +224,6 @@ object ProotManager {
         }
     }
 
-    /**
-     * 解压 .tar.xz：先用 Java XZ 库解压成 .tar，再用系统 tar 提取。
-     */
     private fun extractTarXz(tarXzFile: File, destDir: File) {
         val tarFile = File(tarXzFile.parent, tarXzFile.nameWithoutExtension)
         try {
@@ -341,9 +329,8 @@ object ProotManager {
             val link = File(rootfsDir, name)
             val targetDir = File(rootfsDir, target)
             if (targetDir.exists()) {
-                // 如果 link 是一个真实的普通目录（解压时失败退化成的普通目录），先删除它，以便重建符号链接
                 if (link.exists() && !java.nio.file.Files.isSymbolicLink(link.toPath())) {
-                    Log.w(TAG, "检测到本应为符号链接的普通目录: ${link.absolutePath}，正在清理以重建链接")
+                    Log.w(TAG, "清理普通文件目录，准备重建符号链接: ${link.absolutePath}")
                     link.deleteRecursively()
                 }
                 
@@ -362,9 +349,12 @@ object ProotManager {
     }
 
     /**
-     * 构建 Proot 命令行。
-     * 1. 修复：追加了 "-b", "/system:/system" 挂载，这对于 ELF 在 Android 环境下解析 linker 极为重要。
-     * 2. 修复：挂载当前应用临时目录到容器内，避免容器尝试读写 termux 的硬编码临时目录。
+     * 构建 Proot 命令行
+     *
+     * 【重要修复】
+     * 1. 挂载系统的 /system、/vendor 目录。
+     * 2. 移除了上一版本对 "/tmp" 的外部 bind-mount 绑定！让容器内的 PRoot 采用 link2symlink 机制自行管理内部的 /tmp。
+     * 容器内应用对外部绑定挂载的目录进行 chmod 往往会触发 Android 的安全策略报错。
      */
     fun buildProotCommand(
         context: Context,
@@ -374,9 +364,6 @@ object ProotManager {
         val prootBin   = getProotBin(context).absolutePath
         val rootfsPath = getRootfsDir(context, distro).absolutePath
         val scriptsDir = "/sdcard/QLPanel/scripts"
-        
-        // 容器内 tmp 挂载至应用内部 cache 目录下新建的 proot-tmp，确保 proot 具有完全读写权
-        val hostTmpDir = File(context.cacheDir, "proot-tmp").also { it.mkdirs() }
 
         return listOf(
             prootBin,
@@ -386,8 +373,8 @@ object ProotManager {
             "-b", "/proc:/proc",
             "-b", "/dev:/dev",
             "-b", "/sys:/sys",
-            "-b", "/system:/system",                  // 核心修复1：必须挂载 Android 系统分区
-            "-b", "${hostTmpDir.absolutePath}:/tmp",  // 核心修复2：重定向临时目录挂载
+            "-b", "/system:/system",
+            "-b", "/vendor:/vendor", // 补全系统库可能需要的底层驱动/连接器绑定
             "-b", "$scriptsDir:/data/scripts",
             "-w", "/root",
             "/bin/bash", "--login", "-c", bashCommand
@@ -395,8 +382,25 @@ object ProotManager {
     }
 
     /**
-     * 返回配置好运行环境的 ProcessBuilder。
-     * 1. 修复：显式添加 PROOT_TMP_DIR 环境变量，避免 proot 内部尝试去 canonicalize 找不到的 Termux 路径。
+     * 获取安全且独立的 PRoot 运行期专属临时目录
+     */
+    private fun getStableTmpDir(context: Context): File {
+        // 使用 files 目录下的一个稳定子目录，权限等级最高，比 cache 更不易被 Android 系统干扰。
+        val dir = File(context.filesDir, "pr_tmp")
+        if (!dir.exists()) {
+            dir.mkdirs()
+        }
+        // 赋予严格的所有者读写执行权限（700）防止 chmod 冲突
+        try {
+            dir.setReadable(true, true)
+            dir.setWritable(true, true)
+            dir.setExecutable(true, true)
+        } catch (_: Exception) {}
+        return dir
+    }
+
+    /**
+     * 返回配置好运行环境的 ProcessBuilder
      */
     fun buildProotProcess(
         context: Context,
@@ -412,19 +416,27 @@ object ProotManager {
         val shmemLib  = File(nativeDir, "libandroid-shmem.so")
         val ldPreload = if (shmemLib.exists()) shmemLib.absolutePath else ""
 
-        // 新建并指向本应用的缓存临时目录
-        val hostTmpDir = File(context.cacheDir, "proot-tmp").also { it.mkdirs() }
+        // 获取并重置纯净的临时运行目录
+        val stableTmp = getStableTmpDir(context)
+        try {
+            // 清理上一次运行残留的、可能导致 chmod 失败的脏文件
+            stableTmp.listFiles()?.forEach { it.deleteRecursively() }
+        } catch (_: Exception) {}
 
         return ProcessBuilder(cmd).apply {
+            // 彻底净化宿主机的临时变量污染，确保 PRoot 在纯净沙盒环境中解析其临时文件
+            environment().clear()
+            
+            // 重新设置容器所必须的标准环境变量
             environment()["HOME"]            = "/root"
             environment()["TERM"]            = "xterm-256color"
             environment()["LANG"]            = "C.UTF-8"
-            environment()["PATH"]            =
-                "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+            environment()["PATH"]            = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             environment()["LD_LIBRARY_PATH"] = ldPath
             
-            // 核心修复3：强行改写 PROOT 自身的临时工作路径，避免其寻找 /data/data/com.termux/...
-            environment()["PROOT_TMP_DIR"]   = hostTmpDir.absolutePath
+            // 核心修复：强制重设 PROOT 运行期环境变量，指向 files 下的安全专用路径
+            environment()["PROOT_TMP_DIR"]   = stableTmp.absolutePath
+            environment()["TMPDIR"]          = stableTmp.absolutePath
             
             if (ldPreload.isNotEmpty()) {
                 environment()["LD_PRELOAD"] = ldPreload
