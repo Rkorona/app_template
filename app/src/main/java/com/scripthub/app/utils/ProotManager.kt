@@ -585,6 +585,16 @@ object ProotManager {
         bashCommand: String
     ): ProcessBuilder {
         ensureTallocLib(context)
+
+        // 【自动修复】每次启动 proot 前确保 UsrMerge 软链接正确
+        // 处理旧代码安装的 rootfs（lib/ 可能是空目录而非 lib->usr/lib 软链接）
+        val rootfsDir = getRootfsDir(context, distro)
+        if (rootfsDir.exists()) {
+            try { fixUsrMergeSymlinks(rootfsDir) } catch (e: Exception) {
+                Log.w(TAG, "自动修复 UsrMerge 软链接失败（非致命）: ${e.message}")
+            }
+        }
+
         val cmd       = buildProotCommand(context, distro, bashCommand)
         val libsDir   = getProotLibsDir(context).canonicalPath
         val nativeDir = File(context.applicationInfo.nativeLibraryDir).canonicalPath
