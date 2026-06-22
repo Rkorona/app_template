@@ -6,7 +6,7 @@ import android.util.Log
 object ProotRunner {
     private const val TAG = "ProotRunner"
 
-    /**
+    /** 
      * 通过 proot 执行脚本，直接返回 Process 对象。
      * 调用方通过 process.inputStream 实时读取 stdout+stderr。
      */
