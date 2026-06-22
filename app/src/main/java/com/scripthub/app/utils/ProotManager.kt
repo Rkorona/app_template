@@ -416,7 +416,9 @@ object ProotManager {
                         Os.link(hardLinkTarget.absolutePath, targetFile.absolutePath)
                     } else {
                         // target 仍不存在：退化为复制（兜底）
+                        // 注意：File.copyTo() 不复制权限，需要手动继承 source 的执行位
                         hardLinkTarget.copyTo(targetFile, overwrite = true)
+                        if (hardLinkTarget.canExecute()) targetFile.setExecutable(true, false)
                         Log.w(TAG, "硬链接 target 仍缺失，已降级为复制: $linkName -> ${targetFile.name}")
                     }
                 } catch (e: Exception) {
@@ -472,6 +474,27 @@ object ProotManager {
         }
 
         fixUsrMergeSymlinks(rootfsDir)
+
+        // 强制补全关键 ELF 文件的执行权限。
+        // 某些文件（如 ld-linux、bash）在硬链接降级复制时可能丢失执行位，
+        // 或因 umask 导致 FileOutputStream 创建后未能正确 setExecutable。
+        val criticalExec = listOf(
+            "usr/bin/bash", "bin/bash",
+            "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+            "usr/lib/aarch64-linux-gnu/ld-2.36.so",
+            "usr/lib/aarch64-linux-gnu/ld-2.35.so",
+            "lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+            "usr/bin/sh", "bin/sh",
+            "usr/bin/dash", "bin/dash",
+            "usr/bin/env"
+        )
+        for (rel in criticalExec) {
+            val f = File(rootfsDir, rel)
+            if (f.exists() && !Files.isSymbolicLink(f.toPath())) {
+                f.setExecutable(true, false)
+            }
+        }
+
         File(rootfsDir, ".scripthub_installed").canonicalFile.createNewFile()
     }
 
@@ -704,26 +727,37 @@ object ProotManager {
     }
 
     /**
-     * 提取 proot-loader 到 noBackupFilesDir，返回其绝对路径。
-     * proot（Termux 版）必须通过 PROOT_LOADER 指向此 loader 才能 execve guest 程序。
-     * 没有 loader，任何 execve 都会报 "No such file or directory"。
+     * 返回 proot-loader 的可执行路径。
+     *
+     * 【关键】Android 10+ 禁止从 app 私有数据目录（/data/data/.../files/）执行文件，
+     * 会报 "Permission denied"。只有 native library 目录（/data/app/pkg/lib/arm64/）
+     * 里的文件才有执行权限。因此 proot-loader 作为 libproot-loader.so 打包进 jniLibs，
+     * 由包管理器安装到 nativeLibraryDir，直接从那里读取路径即可。
      */
     fun ensureProotLoader(context: Context): String {
-        val dest = File(context.noBackupFilesDir.absolutePath, "proot-loader")
-        if (!dest.exists() || dest.length() == 0L) {
+        val nativeDir = context.applicationInfo.nativeLibraryDir
+        val loaderInNativeDir = File(nativeDir, "libproot-loader.so")
+        if (loaderInNativeDir.exists()) {
+            Log.d(TAG, "proot-loader 使用 native 目录: ${loaderInNativeDir.absolutePath}")
+            return loaderInNativeDir.absolutePath
+        }
+
+        // 兜底：从 assets 提取到 noBackupFilesDir（可能在旧设备上仍然有效）
+        val fallback = File(context.noBackupFilesDir.absolutePath, "proot-loader")
+        if (!fallback.exists() || fallback.length() == 0L) {
             try {
                 context.assets.open("proot-loader").use { input ->
-                    dest.outputStream().use { input.copyTo(it) }
+                    fallback.outputStream().use { input.copyTo(it) }
                 }
                 Runtime.getRuntime()
-                    .exec(arrayOf("/system/bin/chmod", "755", dest.absolutePath))
+                    .exec(arrayOf("/system/bin/chmod", "755", fallback.absolutePath))
                     .waitFor()
-                Log.d(TAG, "proot-loader 已提取到 ${dest.absolutePath}")
+                Log.d(TAG, "proot-loader 已提取到 ${fallback.absolutePath}（兜底路径）")
             } catch (e: Exception) {
                 Log.e(TAG, "proot-loader 提取失败: ${e.message}")
             }
         }
-        return dest.absolutePath
+        return fallback.absolutePath
     }
 
     suspend fun repairEnvironment(context: Context, distro: DistroType): String =
@@ -743,6 +777,23 @@ object ProotManager {
                 configureRootfs(context, rootfsDir, distro)
             } catch (e: Exception) {
                 sb.appendLine("  配置写入出错（非致命）: ${e.message}")
+            }
+
+            sb.appendLine("▶ 补全关键文件执行权限...")
+            val criticalExec = listOf(
+                "usr/bin/bash", "bin/bash",
+                "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+                "usr/lib/aarch64-linux-gnu/ld-2.36.so",
+                "usr/lib/aarch64-linux-gnu/ld-2.35.so",
+                "lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+                "usr/bin/sh", "bin/sh", "usr/bin/env"
+            )
+            for (rel in criticalExec) {
+                val f = File(rootfsDir, rel)
+                if (f.exists() && !Files.isSymbolicLink(f.toPath())) {
+                    val ok = f.setExecutable(true, false)
+                    if (ok) sb.appendLine("  ✓ chmod +x $rel")
+                }
             }
 
             sb.appendLine()
