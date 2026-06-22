@@ -406,10 +406,15 @@ object ProotManager {
         bashCommand: String
     ): ProcessBuilder {
         ensureTallocLib(context)
-        val cmd = buildProotCommand(context, distro, bashCommand)
-        val libsDir    = getProotLibsDir(context).absolutePath
-        val nativeDir  = context.applicationInfo.nativeLibraryDir
-        val ldPath     = "$libsDir:$nativeDir"
+        val cmd       = buildProotCommand(context, distro, bashCommand)
+        val libsDir   = getProotLibsDir(context).absolutePath
+        val nativeDir = context.applicationInfo.nativeLibraryDir
+        val ldPath    = "$libsDir:$nativeDir"
+
+        // libandroid-shmem.so 为 proot 提供 Android 缺失的 shmget/shmat 共享内存接口，
+        // 缺少它时 proot 无法正确拦截 execve，导致 ELF 解释器找不到。
+        val shmemLib  = File(nativeDir, "libandroid-shmem.so")
+        val ldPreload = if (shmemLib.exists()) shmemLib.absolutePath else ""
 
         return ProcessBuilder(cmd).apply {
             environment()["HOME"]            = "/root"
@@ -418,6 +423,9 @@ object ProotManager {
             environment()["PATH"]            =
                 "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             environment()["LD_LIBRARY_PATH"] = ldPath
+            if (ldPreload.isNotEmpty()) {
+                environment()["LD_PRELOAD"] = ldPreload
+            }
         }
     }
 
@@ -444,6 +452,63 @@ object ProotManager {
             Log.e(TAG, "libtalloc.so.2 提取失败: ${e.message}")
         }
     }
+
+    /**
+     * 不重装 rootfs，只修复符号链接 + 配置文件 + 诊断关键文件是否存在。
+     * 返回诊断报告字符串。
+     */
+    suspend fun repairEnvironment(context: Context, distro: DistroType): String =
+        withContext(Dispatchers.IO) {
+            val rootfsDir = getRootfsDir(context, distro)
+            if (!rootfsDir.exists()) {
+                return@withContext "rootfs 目录不存在，请重新安装 ${distro.displayName}"
+            }
+
+            val sb = StringBuilder()
+
+            sb.appendLine("▶ 修复 UsrMerge 符号链接...")
+            fixUsrMergeSymlinks(rootfsDir)
+
+            sb.appendLine("▶ 重建配置文件...")
+            try {
+                configureRootfs(context, rootfsDir, distro)
+            } catch (e: Exception) {
+                sb.appendLine("  配置写入出错（非致命）: ${e.message}")
+            }
+
+            sb.appendLine()
+            sb.appendLine("── 诊断结果 ──")
+
+            // 关键文件检测
+            data class Check(val label: String, val candidates: List<String>)
+            val checks = listOf(
+                Check("bash",        listOf("usr/bin/bash", "bin/bash")),
+                Check("sh",          listOf("usr/bin/sh",   "bin/sh")),
+                Check("ld-linux",    listOf(
+                    "lib/ld-linux-aarch64.so.1",
+                    "usr/lib/ld-linux-aarch64.so.1",
+                    "lib/aarch64-linux-gnu/ld-linux-aarch64.so.1",
+                    "usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1"
+                )),
+                Check("libc",        listOf(
+                    "lib/aarch64-linux-gnu/libc.so.6",
+                    "usr/lib/aarch64-linux-gnu/libc.so.6"
+                )),
+                Check("bin→usr/bin", listOf("bin")),
+                Check("lib→usr/lib", listOf("lib"))
+            )
+
+            for (check in checks) {
+                val found = check.candidates.firstOrNull { File(rootfsDir, it).exists() }
+                if (found != null) {
+                    sb.appendLine("  ✓ ${check.label}  ($found)")
+                } else {
+                    sb.appendLine("  ✗ ${check.label}  缺失！")
+                }
+            }
+
+            sb.toString().trimEnd()
+        }
 }
 
 // ─── InputStream 扩展工具 ────────────────────────────────────────────────────

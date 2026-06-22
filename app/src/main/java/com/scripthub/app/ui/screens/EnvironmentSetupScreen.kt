@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Terminal
@@ -39,8 +40,11 @@ fun EnvironmentSetupScreen(
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
 
-    var selectedDistro by remember { mutableStateOf(DistroPreference.getDistro(context)) }
-    var isInstalling   by remember { mutableStateOf(false) }
+    var selectedDistro  by remember { mutableStateOf(DistroPreference.getDistro(context)) }
+    var isInstalling    by remember { mutableStateOf(false) }
+    var isRepairing     by remember { mutableStateOf(false) }
+    var repairResult    by remember { mutableStateOf<String?>(null) }
+    var showRepairDialog by remember { mutableStateOf(false) }
     val progress by ProotManager.progress.collectAsState()
 
     val colors = MaterialTheme.colorScheme
@@ -150,12 +154,61 @@ fun EnvironmentSetupScreen(
                 )
             }
 
-            if (ProotManager.isDistroInstalled(context, selectedDistro) && onSetupComplete != null) {
+            if (alreadyInstalled) {
+                OutlinedButton(
+                    onClick = {
+                        isRepairing = true
+                        scope.launch {
+                            val result = ProotManager.repairEnvironment(context, selectedDistro)
+                            repairResult = result
+                            isRepairing = false
+                            showRepairDialog = true
+                        }
+                    },
+                    enabled = !isRepairing,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    if (isRepairing) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("正在检测修复...", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    } else {
+                        Icon(Icons.Default.Build, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("检测并修复环境", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    }
+                }
+            }
+
+            if (alreadyInstalled && onSetupComplete != null) {
                 TextButton(onClick = { onSetupComplete.invoke() }, modifier = Modifier.fillMaxWidth()) {
                     Text("跳过，使用已安装环境", color = colors.onSurfaceVariant)
                 }
             }
         }
+    }
+
+    if (showRepairDialog && repairResult != null) {
+        AlertDialog(
+            onDismissRequest = { showRepairDialog = false },
+            title = {
+                Text("环境诊断报告", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    text = repairResult!!,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showRepairDialog = false }) {
+                    Text("确定")
+                }
+            }
+        )
     }
 }
 
