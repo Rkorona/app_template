@@ -191,9 +191,7 @@ object ProotManager {
 
     /**
      * 最小完整性校验：
-     * 【核心修复】：必须使用 java.nio.file.LinkOption.NOFOLLOW_LINKS 进行符号链接存在性校验。
-     * 否则，指向容器内绝对路径（如指向 /lib/...）的软链接在 Android 宿主机上由于目标不存在，
-     * 会被 File.exists() 直接判定为不存，从而引发误判和安装中断报错。
+     * 必须使用 java.nio.file.LinkOption.NOFOLLOW_LINKS 进行符号链接存在性校验。
      */
     private fun verifyCriticalBinaries(rootfsDir: File): List<String> {
         val mustHave = mapOf(
@@ -287,9 +285,7 @@ object ProotManager {
     }
 
     /**
-     * 【终极核心升级】使用纯 Java 库（Apache Commons Compress）直接在内存流中解压 .tar.xz
-     * 1. 100% 避免对 Android 系统底层 `tar` 命令行工具的依赖，完美处理硬链接、软链接以及特殊权限！
-     * 2. 【POSIX原生修复】：升级软链接与硬链接的底层实现，采用 Android OS 原生 symlink/link 机制，彻底绕过 NIO 封装限制。
+     * 使用纯 Java 库（Apache Commons Compress）直接在内存流中解压 .tar.xz
      */
     private fun extractTarXzJava(tarXzFile: File, destDir: File) {
         tarXzFile.inputStream().buffered(64 * 1024).use { fileIn ->
@@ -546,8 +542,12 @@ object ProotManager {
         }
     }
 
+    /**
+     * 获取 proot-libs 的物理真实目录
+     * 【修正修复】：末尾删除 .canonicalPath 链式调用，保证该函数精确返回 File 实例，杜绝编译类型不匹配报错。
+     */
     private fun getProotLibsDir(context: Context): File =
-        File(context.noBackupFilesDir.canonicalFile, "proot-libs").also { it.mkdirs() }.canonicalPath
+        File(context.noBackupFilesDir.canonicalFile, "proot-libs").also { it.mkdirs() }.canonicalFile
 
     fun ensureTallocLib(context: Context) {
         val dest = File(getProotLibsDir(context), "libtalloc.so.2").canonicalFile
