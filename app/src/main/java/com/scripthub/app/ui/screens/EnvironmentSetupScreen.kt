@@ -87,7 +87,7 @@ fun EnvironmentSetupScreen(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text      = "ScriptHub 内置 proot 引擎，无需安装 Termux 即可在设备上运行完整的 Linux 发行版环境。请选择一个发行版，首次安装约需下载 100-200MB 数据。",
+                text      = "ScriptHub 内置 proot 引擎，无需安装 Termux 即可在设备上运行完整的 Linux 发行版环境。首次安装约需下载 100-200MB 数据。",
                 style     = MaterialTheme.typography.bodyMedium,
                 color     = colors.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -95,23 +95,32 @@ fun EnvironmentSetupScreen(
             )
         }
 
+        val multipleDistros = DistroType.entries.size > 1
         Column(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text       = "选择发行版",
+                text       = if (multipleDistros) "选择发行版" else "发行版",
                 style      = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Black,
                 color      = colors.primary
             )
-            DistroType.entries.forEach { distro ->
-                DistroOptionCard(
-                    distro     = distro,
-                    isSelected = selectedDistro == distro,
-                    isInstalled = ProotManager.isDistroInstalled(context, distro),
-                    enabled    = !isInstalling,
-                    onClick    = { selectedDistro = distro }
+            if (multipleDistros) {
+                DistroType.entries.forEach { distro ->
+                    DistroOptionCard(
+                        distro      = distro,
+                        isSelected  = selectedDistro == distro,
+                        isInstalled = ProotManager.isDistroInstalled(context, distro),
+                        enabled     = !isInstalling,
+                        onClick     = { selectedDistro = distro }
+                    )
+                }
+            } else {
+                val singleDistro = DistroType.entries.first()
+                DistroInfoCard(
+                    distro      = singleDistro,
+                    isInstalled = ProotManager.isDistroInstalled(context, singleDistro)
                 )
             }
         }
@@ -148,7 +157,11 @@ fun EnvironmentSetupScreen(
                 Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    if (alreadyInstalled) "切换到 ${selectedDistro.displayName}" else "安装 ${selectedDistro.displayName}",
+                    when {
+                        !alreadyInstalled -> "安装 ${selectedDistro.displayName}"
+                        DistroType.entries.size > 1 -> "切换到 ${selectedDistro.displayName}"
+                        else -> "重新安装 ${selectedDistro.displayName}"
+                    },
                     fontWeight = FontWeight.Bold,
                     fontSize   = 15.sp
                 )
@@ -271,6 +284,68 @@ private fun DistroOptionCard(
                             color    = colors.onTertiaryContainer,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+            Text(
+                text  = "稳定首选 · apt 包管理 · 约 150MB",
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.onSurfaceVariant
+            )
+        }
+    }
+}
+
+@Composable
+private fun DistroInfoCard(
+    distro: DistroType,
+    isInstalled: Boolean
+) {
+    val colors = MaterialTheme.colorScheme
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(colors.surfaceContainer)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Surface(
+            color  = colors.primaryContainer,
+            shape  = RoundedCornerShape(12.dp),
+            modifier = Modifier.size(44.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    Icons.Default.Terminal,
+                    contentDescription = null,
+                    tint     = colors.onPrimaryContainer,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text       = distro.displayName,
+                    style      = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color      = colors.onSurface
+                )
+                if (isInstalled) {
+                    Surface(
+                        color  = colors.tertiaryContainer,
+                        shape  = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text       = "已安装",
+                            style      = MaterialTheme.typography.labelSmall,
+                            color      = colors.onTertiaryContainer,
+                            fontWeight = FontWeight.Bold,
+                            modifier   = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
                 }
