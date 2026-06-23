@@ -61,9 +61,7 @@ import com.scripthub.app.ui.theme.TypeColorNode
 import com.scripthub.app.ui.theme.TypeColorOther
 import com.scripthub.app.ui.theme.StatusRunning
 
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 
 // ─────────────────────────────────────────────────────────────
 // 任务启停状态
@@ -146,19 +144,7 @@ fun ScheduledTaskManagerScreen(
     val dbTasks by taskDao.getAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val tasksList = remember(dbTasks) { dbTasks.map { it.toUiModel() } }
 
-    val pullRefreshState = rememberPullToRefreshState()
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) {
-            withContext(Dispatchers.IO) {
-                dbTasks.filter { it.isEnabled }.forEach { task ->
-                    val computed = CronNextRunCalculator.nextRunTime(task.cronExpression)
-                    taskDao.update(task.copy(nextRunTime = computed))
-                }
-            }
-            kotlinx.coroutines.delay(500)
-            pullRefreshState.endRefresh()
-        }
-    }
+    var isRefreshing by remember { mutableStateOf(false) }
 
     // 对数据库中仍显示"计算中..."的老任务补算下次执行时间，并每分钟刷新一次所有已启用任务的下次执行时间
     LaunchedEffect(dbTasks) {
@@ -292,7 +278,23 @@ fun ScheduledTaskManagerScreen(
             if (filteredTasks.isEmpty()) {
                 EmptyTasksState(modifier = Modifier.fillMaxWidth().weight(1f))
             } else {
-                Box(modifier = Modifier.fillMaxWidth().weight(1f).nestedScroll(pullRefreshState.nestedScrollConnection)) {
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        isRefreshing = true
+                        scope.launch {
+                            withContext(Dispatchers.IO) {
+                                dbTasks.filter { it.isEnabled }.forEach { task ->
+                                    val computed = CronNextRunCalculator.nextRunTime(task.cronExpression)
+                                    taskDao.update(task.copy(nextRunTime = computed))
+                                }
+                            }
+                            kotlinx.coroutines.delay(500)
+                            isRefreshing = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
@@ -321,10 +323,6 @@ fun ScheduledTaskManagerScreen(
                             )
                         }
                     }
-                    PullToRefreshContainer(
-                        state = pullRefreshState,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                    )
                 }
             }
         }

@@ -1,0 +1,99 @@
+﻿2026-06-23T13:06:57.5101947Z ##[group]Run ./gradlew assembleRelease
+./gradlew assembleRelease
+shell: /usr/bin/bash -e {0}
+env:
+  JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+  JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+  KEYSTORE_PATH: ***.jks
+  KEY_STORE_PASSWORD: ***
+  ALIAS: ***
+  KEY_PASSWORD: ***
+
+Welcome to Gradle 9.5.1!
+
+Here are the highlights of this ***:
+ - Task provenance in reports and failure messages
+ - Type-safe accessors for precompiled Kotlin Settings plugins
+
+For more details see https://docs.gradle.org/9.5.1/***-notes.html
+
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as no cached configuration is available for tasks: assembleRelease
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :app:extractProguardFiles
+> Task :app:mergeReleaseJniLibFolders
+> Task :app:generateReleaseResources
+> Task :app:packageReleaseResources
+> Task :app:checkReleaseDuplicateClasses
+> Task :app:javaPreCompileRelease
+> Task :app:processReleaseNavigationResources
+> Task :app:parseReleaseLocalResources
+> Task :app:checkReleaseAarMetadata
+> Task :app:mapReleaseSourceSetPaths
+> Task :app:compileReleaseNavigationResources
+> Task :app:generateReleaseRFile
+> Task :app:createReleaseCompatibleScreenManifests
+> Task :app:extractDeepLinksRelease
+> Task :app:processReleaseMainManifest
+> Task :app:processReleaseManifest
+> Task :app:processReleaseManifestForPackage
+> Task :app:desugarReleaseFileDependencies
+> Task :app:mergeReleaseStartupProfile
+> Task :app:mergeReleaseResources
+> Task :app:processReleaseResources
+> Task :app:mergeReleaseArtProfile
+> Task :app:mergeReleaseAssets
+> Task :app:compressReleaseAssets
+> Task :app:extractReleaseVersionControlInfo
+> Task :app:optimizeReleaseResources
+> Task :app:collectReleaseDependencies
+> Task :app:sdkReleaseDependencyData
+> Task :app:validateSigningRelease
+> Task :app:writeReleaseAppMetadata
+> Task :app:writeReleaseSigningConfigVersions
+> Task :app:configureCMakeRelWithDebInfo[arm64-v8a]
+> Task :app:buildCMakeRelWithDebInfo[arm64-v8a]
+> Task :app:mergeReleaseNativeLibs
+> Task :app:stripReleaseDebugSymbols
+> Task :app:extractReleaseNativeSymbolTables
+> Task :app:mergeReleaseNativeDebugMetadata
+> Task :app:kspReleaseKotlin
+> Task :app:mergeExtDexRelease
+
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScheduledTaskManagerScreen.kt:65:49 Unresolved reference 'PullToRefreshContainer'.
+> Task :app:compileReleaseKotlin
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScheduledTaskManagerScreen.kt:150:26 Unresolved reference 'isRefreshing'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScheduledTaskManagerScreen.kt:152:13 Unresolved reference 'withContext'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScheduledTaskManagerScreen.kt:155:29 Suspension functions can only be called within coroutine body.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScheduledTaskManagerScreen.kt:159:30 Unresolved reference 'endRefresh'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScheduledTaskManagerScreen.kt:295:97 Unresolved reference 'nestedScrollConnection'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScheduledTaskManagerScreen.kt:324:21 Unresolved reference 'PullToRefreshContainer'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScriptManagerScreen.kt:63:49 Unresolved reference 'PullToRefreshContainer'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScriptManagerScreen.kt:91:26 Unresolved reference 'isRefreshing'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScriptManagerScreen.kt:95:30 Unresolved reference 'endRefresh'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScriptManagerScreen.kt:250:97 Unresolved reference 'nestedScrollConnection'.
+e: file:///home/runner/work/ScriptHub/ScriptHub/app/src/main/java/com/scripthub/app/ui/screens/ScriptManagerScreen.kt:270:21 Unresolved reference 'PullToRefreshContainer'.
+
+
+> Task :app:compileReleaseKotlin FAILED
+FAILURE: Build failed with an exception.
+
+
+[Incubating] Problems report is available at: file:///home/runner/work/ScriptHub/ScriptHub/build/reports/problems/problems-report.html
+* What went wrong:
+40 actionable tasks: 40 executed
+Execution failed for task ':app:compileReleaseKotlin' (registered by plugin 'com.android.internal.application').
+Configuration cache entry stored.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.btapi.BuildToolsApiCompilationWork
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 58s
+Process completed with exit code 1.

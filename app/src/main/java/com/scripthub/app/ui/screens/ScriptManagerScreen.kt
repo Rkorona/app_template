@@ -59,10 +59,9 @@ import com.scripthub.app.ui.theme.TerminalSuccess
 import com.scripthub.app.utils.WorkdirPreference
 import com.scripthub.app.viewmodel.ScriptViewModel
 
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 enum class DependencyStatus { None, Configured, Installed, Error }
 
@@ -87,14 +86,8 @@ fun ScriptManagerScreen(
     var scriptPendingDelete by remember { mutableStateOf<ScriptEntity?>(null) }
     var isFabExpanded by remember { mutableStateOf(false) }
 
-    val pullRefreshState = rememberPullToRefreshState()
-    if (pullRefreshState.isRefreshing) {
-        LaunchedEffect(true) {
-            viewModel.syncFilesWithDatabase()
-            delay(500)
-            pullRefreshState.endRefresh()
-        }
-    }
+    var isRefreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     // ─── 🛠️ 新建文件的表单对话框状态 ───
     var showSingleFileDialog by remember { mutableStateOf(false) }
@@ -247,7 +240,18 @@ fun ScriptManagerScreen(
                     .filter { (selectedFilter == "全部" || it.type == selectedFilter) && it.name.contains(searchQuery, ignoreCase = true) }
                     .sortedByDescending { it.isRunning }
 
-                Box(modifier = Modifier.fillMaxWidth().weight(1f).nestedScroll(pullRefreshState.nestedScrollConnection)) {
+                PullToRefreshBox(
+                    isRefreshing = isRefreshing,
+                    onRefresh = {
+                        isRefreshing = true
+                        scope.launch {
+                            viewModel.syncFilesWithDatabase()
+                            delay(500)
+                            isRefreshing = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().weight(1f)
+                ) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp),
@@ -267,10 +271,6 @@ fun ScriptManagerScreen(
                             }
                         }
                     }
-                    PullToRefreshContainer(
-                        state = pullRefreshState,
-                        modifier = Modifier.align(Alignment.TopCenter),
-                    )
                 }
             }
 
