@@ -23,7 +23,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.scripthub.app.data.AppDatabase
 import com.scripthub.app.data.RunLogEntity
+import com.scripthub.app.utils.FileHelper
 import com.scripthub.app.utils.ProotRunner
+import com.scripthub.app.utils.ScriptForegroundService
+import com.scripthub.app.utils.ShizukuHelper
 import com.scripthub.app.ui.theme.TerminalInfo
 import com.scripthub.app.ui.theme.TerminalSuccess
 import com.scripthub.app.ui.theme.TerminalError
@@ -40,6 +43,17 @@ import java.util.Date
 import java.util.Locale
 
 data class LogLine(val text: String, val color: Color = TerminalSuccess)
+
+private fun lineColor(line: String): Color = when {
+    line.contains("error",     ignoreCase = true) ||
+    line.contains("failed",    ignoreCase = true) ||
+    line.contains("errno",     ignoreCase = true)  -> TerminalError
+    line.contains("success",   ignoreCase = true) ||
+    line.contains("installed", ignoreCase = true)  -> TerminalSuccess
+    line.contains("warning",   ignoreCase = true) ||
+    line.contains("warn",      ignoreCase = true)  -> TerminalWarn
+    else -> TerminalInfo
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,7 +76,12 @@ fun TerminalConsoleBottomSheet(
     val separatorColor = MaterialTheme.colorScheme.outlineVariant
 
     LaunchedEffect(taskName) {
-        logs.add(LogLine("[INFO] 初始化 proot 执行管线...", TerminalInfo))
+        val useShizuku = ShizukuHelper.state.value == ShizukuHelper.State.READY
+
+        logs.add(LogLine(
+            "[INFO] 初始化执行管线 (${if (useShizuku) "Shizuku Shell 权限" else "proot"})...",
+            TerminalInfo
+        ))
 
         val scriptEntity = withContext(Dispatchers.IO) {
             scriptDao.getByName(scriptName) ?: scriptDao.getByName(taskName)
@@ -90,115 +109,191 @@ fun TerminalConsoleBottomSheet(
         val rawLines  = mutableListOf<String>()
         var exitCode  = -1
 
-        withContext(Dispatchers.IO) {
-            var process: Process?       = null
-            var reader:  BufferedReader? = null
+        if (useShizuku && scriptEntity.type == "Shell") {
+            // ── Shizuku 路径：以 shell 用户权限执行 sh 脚本 ──────────────────────────
+            withContext(Dispatchers.IO) {
+                try {
+                    val scriptFile = if (scriptEntity.isFolder)
+                        java.io.File(FileHelper.scriptsDir, "${scriptEntity.name}/${scriptEntity.entryPoint}")
+                    else
+                        java.io.File(FileHelper.scriptsDir, scriptEntity.name)
 
-            try {
-                withContext(Dispatchers.Main) {
-                    logs.add(LogLine("[EXEC] 启动 proot 进程...", TerminalExec))
-                }
-                com.scripthub.app.utils.ScriptForegroundService.start(context, "正在手动执行: $taskName")
-
-                process = ProotRunner.executeScript(
-                    context    = context,
-                    scriptName = scriptEntity.name,
-                    isFolder   = scriptEntity.isFolder,
-                    entryPoint = scriptEntity.entryPoint,
-                    scriptType = scriptEntity.type,
-                    envVars    = envVars
-                )
-
-                withContext(Dispatchers.Main) {
-                    logs.add(LogLine("[INFO] proot 进程已启动，正在读取输出 ➔", TerminalSuccess))
-                }
-
-                reader = BufferedReader(InputStreamReader(process.inputStream))
-                var line: String?
-
-                while (reader.readLine().also { line = it } != null) {
-                    val finalLine = line!!
-                    rawLines.add(finalLine)
-
-                    if (finalLine.startsWith("[SYSTEM_EXIT_CODE]:")) {
-                        exitCode = finalLine.removePrefix("[SYSTEM_EXIT_CODE]:").trim().toIntOrNull() ?: -1
-                        continue
-                    }
-
-                    val logColor = when {
-                        finalLine.contains("error",     ignoreCase = true) ||
-                        finalLine.contains("failed",    ignoreCase = true) ||
-                        finalLine.contains("errno",     ignoreCase = true)  -> TerminalError
-                        finalLine.contains("success",   ignoreCase = true) ||
-                        finalLine.contains("installed", ignoreCase = true)  -> TerminalSuccess
-                        finalLine.contains("warning",   ignoreCase = true) ||
-                        finalLine.contains("warn",      ignoreCase = true)  -> TerminalWarn
-                        else -> TerminalInfo
-                    }
+                    val scriptPath = scriptFile.absolutePath
 
                     withContext(Dispatchers.Main) {
-                        logs.add(LogLine(finalLine, logColor))
+                        logs.add(LogLine("[EXEC] 通过 Shizuku 以 shell 权限执行: $scriptPath", TerminalExec))
                     }
-                }
 
-                process.waitFor()
+                    ScriptForegroundService.start(context, "正在手动执行: $taskName")
 
-            } catch (e: IllegalStateException) {
-                withContext(Dispatchers.Main) {
-                    logs.add(LogLine("[ERROR] ${e.message}", TerminalError))
-                    logs.add(LogLine("[INFO] 请前往「配置中心 → Linux 运行环境」完成安装", TerminalWarn))
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    logs.add(LogLine("[ERROR] 进程异常: ${e.message}", TerminalError))
-                }
-            } finally {
-                com.scripthub.app.utils.ScriptForegroundService.stop(context)
-                withContext(NonCancellable) {
-                    try {
-                        reader?.close()
-                        process?.destroy()
-                    } catch (_: Exception) {}
+                    val envExports = if (envVars.isEmpty()) "" else
+                        envVars.entries.joinToString(" && ") { (k, v) ->
+                            val escaped = v.replace("'", "'\\''")
+                            "export $k='$escaped'"
+                        } + " && "
 
-                    val durationMs = System.currentTimeMillis() - startTime
+                    val result = ShizukuHelper.exec("${envExports}sh \"$scriptPath\"")
+                    exitCode = result.exitCode
 
-                    try {
-                        val logText = rawLines
-                            .filter { !it.startsWith("[SYSTEM_EXIT_CODE]:") }
-                            .joinToString("\n")
-                        runLogDao.insert(
-                            RunLogEntity(
-                                scriptName = scriptName,
-                                startTime  = startTime,
-                                durationMs = durationMs,
-                                exitCode   = exitCode,
-                                logText    = logText
-                            )
-                        )
-                        runLogDao.pruneOldLogs(scriptName)
-                    } catch (_: Exception) {}
-
-                    try {
-                        val fmt   = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-                        val label = if (exitCode == 0) "✅ ${fmt.format(Date(startTime))}"
-                                    else "❌ ${fmt.format(Date(startTime))}"
-                        db.scriptDao().updateLastRun(scriptName, label)
-                    } catch (_: Exception) {}
+                    val output = (result.stdout + result.stderr).trimEnd()
+                    output.lines().filter { it.isNotBlank() }.forEach { rawLines.add(it) }
 
                     withContext(Dispatchers.Main) {
-                        isRunning = false
-                        logs.add(LogLine("─".repeat(48), separatorColor))
-                        val exitMsg = when (exitCode) {
-                            0    -> "进程正常退出 (Exit Code: 0)"
-                            -1   -> "进程退出 (Exit Code: 未知)"
-                            else -> "进程异常退出 (Exit Code: $exitCode)"
+                        if (output.isBlank()) {
+                            logs.add(LogLine("[INFO] (无输出)", TerminalInfo))
+                        } else {
+                            output.lines().filter { it.isNotBlank() }.forEach { line ->
+                                logs.add(LogLine(line, lineColor(line)))
+                            }
                         }
-                        logs.add(
-                            LogLine(
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        logs.add(LogLine("[ERROR] Shizuku 执行异常: ${e.message}", TerminalError))
+                    }
+                } finally {
+                    ScriptForegroundService.stop(context)
+                    withContext(NonCancellable) {
+                        val durationMs = System.currentTimeMillis() - startTime
+                        try {
+                            runLogDao.insert(
+                                RunLogEntity(
+                                    scriptName = scriptName,
+                                    startTime  = startTime,
+                                    durationMs = durationMs,
+                                    exitCode   = exitCode,
+                                    logText    = rawLines.joinToString("\n")
+                                )
+                            )
+                            runLogDao.pruneOldLogs(scriptName)
+                        } catch (_: Exception) {}
+
+                        try {
+                            val fmt   = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+                            val label = if (exitCode == 0) "✅ ${fmt.format(Date(startTime))}"
+                                        else "❌ ${fmt.format(Date(startTime))}"
+                            db.scriptDao().updateLastRun(scriptName, label)
+                        } catch (_: Exception) {}
+
+                        withContext(Dispatchers.Main) {
+                            isRunning = false
+                            logs.add(LogLine("─".repeat(48), separatorColor))
+                            val exitMsg = when (exitCode) {
+                                0    -> "进程正常退出 (Exit Code: 0)"
+                                -1   -> "进程退出 (Exit Code: 未知)"
+                                else -> "进程异常退出 (Exit Code: $exitCode)"
+                            }
+                            logs.add(LogLine(
                                 "[FINISHED] $exitMsg",
                                 if (exitCode == 0) TerminalSuccess else TerminalError
+                            ))
+                        }
+                    }
+                }
+            }
+        } else {
+            // ── proot 路径：Python / Node.js 脚本，或 Shizuku 未就绪时的 Shell 脚本 ──
+            withContext(Dispatchers.IO) {
+                var process: Process?       = null
+                var reader:  BufferedReader? = null
+
+                try {
+                    withContext(Dispatchers.Main) {
+                        if (!useShizuku && scriptEntity.type == "Shell") {
+                            logs.add(LogLine("[WARN] Shizuku 未就绪，改用 proot 执行（无法访问 Android/data）", TerminalWarn))
+                        }
+                        logs.add(LogLine("[EXEC] 启动 proot 进程...", TerminalExec))
+                    }
+
+                    ScriptForegroundService.start(context, "正在手动执行: $taskName")
+
+                    process = ProotRunner.executeScript(
+                        context    = context,
+                        scriptName = scriptEntity.name,
+                        isFolder   = scriptEntity.isFolder,
+                        entryPoint = scriptEntity.entryPoint,
+                        scriptType = scriptEntity.type,
+                        envVars    = envVars
+                    )
+
+                    withContext(Dispatchers.Main) {
+                        logs.add(LogLine("[INFO] proot 进程已启动，正在读取输出 ➔", TerminalSuccess))
+                    }
+
+                    reader = BufferedReader(InputStreamReader(process.inputStream))
+                    var line: String?
+
+                    while (reader.readLine().also { line = it } != null) {
+                        val finalLine = line!!
+                        rawLines.add(finalLine)
+
+                        if (finalLine.startsWith("[SYSTEM_EXIT_CODE]:")) {
+                            exitCode = finalLine.removePrefix("[SYSTEM_EXIT_CODE]:").trim().toIntOrNull() ?: -1
+                            continue
+                        }
+
+                        withContext(Dispatchers.Main) {
+                            logs.add(LogLine(finalLine, lineColor(finalLine)))
+                        }
+                    }
+
+                    process.waitFor()
+
+                } catch (e: IllegalStateException) {
+                    withContext(Dispatchers.Main) {
+                        logs.add(LogLine("[ERROR] ${e.message}", TerminalError))
+                        logs.add(LogLine("[INFO] 请前往「配置中心 → Linux 运行环境」完成安装", TerminalWarn))
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        logs.add(LogLine("[ERROR] 进程异常: ${e.message}", TerminalError))
+                    }
+                } finally {
+                    ScriptForegroundService.stop(context)
+                    withContext(NonCancellable) {
+                        try {
+                            reader?.close()
+                            process?.destroy()
+                        } catch (_: Exception) {}
+
+                        val durationMs = System.currentTimeMillis() - startTime
+
+                        try {
+                            val logText = rawLines
+                                .filter { !it.startsWith("[SYSTEM_EXIT_CODE]:") }
+                                .joinToString("\n")
+                            runLogDao.insert(
+                                RunLogEntity(
+                                    scriptName = scriptName,
+                                    startTime  = startTime,
+                                    durationMs = durationMs,
+                                    exitCode   = exitCode,
+                                    logText    = logText
+                                )
                             )
-                        )
+                            runLogDao.pruneOldLogs(scriptName)
+                        } catch (_: Exception) {}
+
+                        try {
+                            val fmt   = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+                            val label = if (exitCode == 0) "✅ ${fmt.format(Date(startTime))}"
+                                        else "❌ ${fmt.format(Date(startTime))}"
+                            db.scriptDao().updateLastRun(scriptName, label)
+                        } catch (_: Exception) {}
+
+                        withContext(Dispatchers.Main) {
+                            isRunning = false
+                            logs.add(LogLine("─".repeat(48), separatorColor))
+                            val exitMsg = when (exitCode) {
+                                0    -> "进程正常退出 (Exit Code: 0)"
+                                -1   -> "进程退出 (Exit Code: 未知)"
+                                else -> "进程异常退出 (Exit Code: $exitCode)"
+                            }
+                            logs.add(LogLine(
+                                "[FINISHED] $exitMsg",
+                                if (exitCode == 0) TerminalSuccess else TerminalError
+                            ))
+                        }
                     }
                 }
             }
@@ -254,7 +349,7 @@ fun TerminalConsoleBottomSheet(
                             color      = colors.onSurface
                         )
                         Text(
-                            text  = "proot 终端输出",
+                            text  = "终端输出",
                             style = MaterialTheme.typography.labelSmall,
                             color = colors.onSurfaceVariant
                         )
