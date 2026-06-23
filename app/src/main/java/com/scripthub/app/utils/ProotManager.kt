@@ -651,8 +651,23 @@ object ProotManager {
             }
         }
 
+        commands.addAll(listOf("-b", "$scriptsDir:/data/scripts"))
+
+        // 挂载 Android 存储到容器，脚本可直接访问 /storage/emulated/0、/sdcard 等路径
+        val storageMounts = listOf(
+            "/storage" to "storage",
+            "/sdcard"  to "sdcard"
+        )
+        for ((hostPath, guestRelative) in storageMounts) {
+            if (File(hostPath).exists()) {
+                // 在 rootfs 内预建挂载点目录（proot 要求 guest 路径存在）
+                val guestDir = File(rootfsDir, guestRelative)
+                if (!guestDir.exists()) guestDir.mkdirs()
+                commands.addAll(listOf("-b", "$hostPath:/$guestRelative"))
+            }
+        }
+
         commands.addAll(listOf(
-            "-b", "$scriptsDir:/data/scripts",
             "-w", "/root",
             "/usr/bin/bash", "--login", "-c", bashCommand
         ))
