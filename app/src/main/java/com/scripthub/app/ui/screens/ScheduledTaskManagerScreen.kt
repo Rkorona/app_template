@@ -487,7 +487,7 @@ private fun EmptyTasksState(modifier: Modifier = Modifier) {
             modifier = Modifier.size(72.dp).background(MaterialTheme.colorScheme.surfaceContainerHigh, CircleShape),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(30.dp))
+            Icon(Icons.Default.Alarm, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(30.dp))
         }
         Spacer(modifier = Modifier.height(16.dp))
         Text("没有配置调度任务", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)

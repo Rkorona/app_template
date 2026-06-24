@@ -489,7 +489,7 @@ private fun EmptyScriptsState(hasAnyScripts: Boolean) {
         )
         Spacer(Modifier.height(4.dp))
         Text(
-            text      = "点击右下角"添加/新建"在 $workdir 下创建第一个代码文件",
+            text      = "点击右下角\u300C添加/新建\u300D在 $workdir 下创建第一个代码文件",
             style     = MaterialTheme.typography.bodySmall,
             textAlign = TextAlign.Center,
             color     = MaterialTheme.colorScheme.onSurfaceVariant,
