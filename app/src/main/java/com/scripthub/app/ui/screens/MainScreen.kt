@@ -27,8 +27,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scripthub.app.data.AppDatabase
 import androidx.compose.material.icons.filled.History
+import com.scripthub.app.data.ScriptEntity
 import com.scripthub.app.ui.components.ExpressiveNavigationBar
 import com.scripthub.app.ui.components.ExpressiveTopAppBar
+import com.scripthub.app.ui.components.FolderFileBrowserSheet
 import com.scripthub.app.ui.components.GlobalLogBottomSheet
 import com.scripthub.app.utils.CronNextRunCalculator
 import com.scripthub.app.utils.DistroPreference
@@ -114,11 +116,12 @@ fun MainScreen() {
         }
     }
 
-    var hasFilePermission by remember { mutableStateOf(true) }
-    var editingFileName   by remember { mutableStateOf("") }
-    var editingIsFolder   by remember { mutableStateOf(false) }
-    var editingEntryPoint by remember { mutableStateOf("") }
-    var showGlobalLog     by remember { mutableStateOf(false) }
+    var hasFilePermission    by remember { mutableStateOf(true) }
+    var editingFileName      by remember { mutableStateOf("") }
+    var editingIsFolder      by remember { mutableStateOf(false) }
+    var editingEntryPoint    by remember { mutableStateOf("") }
+    var showGlobalLog        by remember { mutableStateOf(false) }
+    var folderBrowserTarget  by remember { mutableStateOf<ScriptEntity?>(null) }
 
     fun checkPermission() {
         hasFilePermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -265,17 +268,22 @@ fun MainScreen() {
         Crossfade(targetState = currentRoute, label = "Route Transition") { route ->
             when (route) {
                 "Dashboard"      -> DashboardScreen(
-                    state          = dashboardState,
-                    contentPadding = innerPadding,
-                    onViewAllLogs  = { showGlobalLog = true }
+                    state           = dashboardState,
+                    contentPadding  = innerPadding,
+                    onViewAllLogs   = { showGlobalLog = true },
+                    onFailuresClick = { showGlobalLog = true }
                 )
                 "ScriptManager"  -> ScriptManagerScreen(
                     contentPadding = innerPadding,
                     onOpenDetail   = { script ->
-                        editingFileName   = script.name
-                        editingIsFolder   = script.isFolder
-                        editingEntryPoint = script.entryPoint
-                        navigateTo("ScriptEditor")
+                        if (script.isFolder) {
+                            folderBrowserTarget = script
+                        } else {
+                            editingFileName   = script.name
+                            editingIsFolder   = false
+                            editingEntryPoint = script.name
+                            navigateTo("ScriptEditor")
+                        }
                     }
                 )
                 "ScheduledTasks" -> ScheduledTaskManagerScreen(contentPadding = innerPadding)
@@ -299,5 +307,20 @@ fun MainScreen() {
 
     if (showGlobalLog) {
         GlobalLogBottomSheet(onDismiss = { showGlobalLog = false })
+    }
+
+    folderBrowserTarget?.let { folder ->
+        FolderFileBrowserSheet(
+            folderName   = folder.name,
+            entryPoint   = folder.entryPoint,
+            onDismiss    = { folderBrowserTarget = null },
+            onSelectFile = { relPath ->
+                editingFileName   = folder.name
+                editingIsFolder   = true
+                editingEntryPoint = relPath
+                folderBrowserTarget = null
+                navigateTo("ScriptEditor")
+            }
+        )
     }
 }
