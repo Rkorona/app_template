@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.scripthub.app.utils.DistroPreference
 import com.scripthub.app.utils.FileHelper
 import com.scripthub.app.utils.ProotManager
+import com.scripthub.app.utils.ScriptForegroundService
 import com.scripthub.app.utils.ShizukuHelper
 import com.scripthub.app.utils.WorkdirPreference
 
@@ -54,6 +55,9 @@ fun SettingsScreen(
     var showWorkdirDialog by remember { mutableStateOf(false) }
 
     val shizukuState by ShizukuHelper.state.collectAsStateWithLifecycle()
+
+    val prefs = remember { context.getSharedPreferences("app_prefs", android.content.Context.MODE_PRIVATE) }
+    var fgServiceEnabled by remember { mutableStateOf(prefs.getBoolean("fg_service_enabled", false)) }
 
     LazyColumn(
         modifier = Modifier
@@ -212,6 +216,22 @@ fun SettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
             ) {
                 Column(Modifier.padding(vertical = 8.dp)) {
+                    ForegroundServiceToggle(
+                        enabled   = fgServiceEnabled,
+                        onToggle  = { enabled ->
+                            prefs.edit().putBoolean("fg_service_enabled", enabled).apply()
+                            fgServiceEnabled = enabled
+                            if (enabled) {
+                                ScriptForegroundService.start(context, "ScriptHub 后台守护运行中")
+                            } else {
+                                ScriptForegroundService.stop(context)
+                            }
+                        }
+                    )
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 24.dp),
+                        color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                    )
                     ConfigListItem(
                         icon     = Icons.Default.NotificationsActive,
                         title    = "推送通知",
@@ -412,6 +432,54 @@ private fun ConfigCard(
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = contentColor.copy(alpha = 0.7f), lineHeight = 14.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun ForegroundServiceToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        modifier          = Modifier
+            .fillMaxWidth()
+            .clickable { onToggle(!enabled) }
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier        = Modifier
+                .size(42.dp)
+                .background(
+                    if (enabled) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.NotificationsActive,
+                contentDescription = null,
+                tint     = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer
+                           else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "前台守护服务",
+                style      = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color      = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                if (enabled) "后台常驻通知，防止系统杀进程" else "关闭时系统可能回收应用进程",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked         = enabled,
+            onCheckedChange = onToggle
+        )
     }
 }
 

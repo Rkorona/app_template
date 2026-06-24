@@ -1,17 +1,7 @@
-// app_template/app/src/main/java/com/example/myapplication/ui/screens/DashboardScreen.kt
-
 package com.scripthub.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
@@ -19,19 +9,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cancel
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,20 +24,15 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.roundToInt
-import com.scripthub.app.ui.theme.StatusRunning
-import com.scripthub.app.ui.theme.TerminalSuccess
-import com.scripthub.app.ui.theme.TerminalInfo
-import com.scripthub.app.ui.theme.TerminalError
-import com.scripthub.app.ui.theme.LogCardBg
-import com.scripthub.app.ui.theme.LogCardHeaderText
-import com.scripthub.app.ui.theme.LogCardMutedText
+import com.scripthub.app.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.*
 
 // =====================================================================================
-// 数据模型 —— 归零初始状态，为接入真实数据库/执行环境做准备
+// 数据模型
 // =====================================================================================
 
 enum class LogStatus { SUCCESS, RUNNING, FAILED }
@@ -71,19 +47,12 @@ data class LogEntry(
 data class NextRun(val time: String, val scriptName: String)
 
 data class DashboardUiState(
-    val serviceRunning: Boolean = false,
-    val uptimeLabel: String = "服务尚未启动",
     val totalScripts: Int = 0,
-    val runningNow: Int = 0,
+    val enabledTaskCount: Int = 0,
     val triggeredToday: Int = 0,
     val failedCount: Int = 0,
     val nextRun: NextRun = NextRun("--:--", "暂无调度任务"),
-    // 保留系统真实资源占用的模拟数值
-    val ramUsedGb: Float = 2.4f,
-    val ramTotalGb: Float = 4f,
-    val storageUsedGb: Float = 1.2f,
-    val storageTotalGb: Float = 10f,
-    val recentLogs: List<LogEntry> = emptyList() // 初始日志为空
+    val recentLogs: List<LogEntry> = emptyList()
 )
 
 // =====================================================================================
@@ -94,8 +63,6 @@ data class DashboardUiState(
 fun DashboardScreen(
     state: DashboardUiState = DashboardUiState(),
     contentPadding: PaddingValues = PaddingValues(),
-    onRestartService: () -> Unit = {},
-    onViewServiceLogs: () -> Unit = {},
     onFailuresClick: () -> Unit = {},
     onStatClick: (String) -> Unit = {},
     onViewAllLogs: () -> Unit = {},
@@ -107,211 +74,409 @@ fun DashboardScreen(
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(
-            start = 16.dp,
-            end = 16.dp,
-            top = contentPadding.calculateTopPadding() + 12.dp,
-            bottom = contentPadding.calculateBottomPadding() + 16.dp
+            start  = 16.dp,
+            end    = 16.dp,
+            top    = contentPadding.calculateTopPadding() + 8.dp,
+            bottom = contentPadding.calculateBottomPadding() + 24.dp
         ),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item(key = "service") {
+        item(key = "hero") {
             AnimatedSection(visible, 0) {
-                ServiceHealthCard(state, onRestartService, onViewServiceLogs)
+                HeroCard(state, onViewAllLogs)
+            }
+        }
+
+        item(key = "info_row") {
+            AnimatedSection(visible, 80) {
+                InfoRow(state, onStatClick)
             }
         }
 
         if (state.failedCount > 0) {
             item(key = "failures") {
-                AnimatedSection(visible, 60) {
+                AnimatedSection(visible, 130) {
                     FailureBanner(state.failedCount, onFailuresClick)
                 }
             }
         }
 
-        item(key = "stats") {
-            AnimatedSection(visible, 120) {
-                StatGrid(state, onStatClick)
-            }
-        }
-
-
-
         item(key = "logs") {
-            AnimatedSection(visible, 240) {
-                TerminalLogCard(state.recentLogs, onViewAllLogs)
+            AnimatedSection(visible, 180) {
+                RecentActivityCard(state.recentLogs, onViewAllLogs)
             }
         }
     }
 }
 
 @Composable
-private fun AnimatedSection(visible: Boolean, delayMillis: Int, content: @Composable () -> Unit) {
+private fun AnimatedSection(visible: Boolean, delayMs: Int, content: @Composable () -> Unit) {
     AnimatedVisibility(
         visible = visible,
-        enter = fadeIn(tween(350, delayMillis)) +
-            slideInVertically(initialOffsetY = { it / 6 }, animationSpec = tween(350, delayMillis))
+        enter   = fadeIn(tween(400, delayMs)) +
+                  slideInVertically(initialOffsetY = { it / 8 }, animationSpec = tween(400, delayMs))
+    ) { content() }
+}
+
+// =====================================================================================
+// 1. Hero 卡 —— 今日活动摘要
+// =====================================================================================
+
+@Composable
+private fun HeroCard(state: DashboardUiState, onViewAllLogs: () -> Unit) {
+    val today = remember { SimpleDateFormat("M月d日 · E", Locale.CHINESE).format(Date()) }
+    val c     = MaterialTheme.colorScheme
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = c.primaryContainer),
+        shape  = RoundedCornerShape(32.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        content()
+        Column(Modifier.padding(horizontal = 24.dp, vertical = 22.dp)) {
+
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = c.primary.copy(alpha = 0.14f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text     = today,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        style    = MaterialTheme.typography.labelMedium,
+                        color    = c.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                TextButton(
+                    onClick        = onViewAllLogs,
+                    contentPadding = PaddingValues(horizontal = 8.dp)
+                ) {
+                    Text(
+                        "执行日志",
+                        style    = MaterialTheme.typography.labelMedium,
+                        color    = c.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                    Spacer(Modifier.width(2.dp))
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint     = c.onPrimaryContainer.copy(alpha = 0.7f)
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(18.dp))
+
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text  = "${state.triggeredToday}",
+                    style = MaterialTheme.typography.displayMedium.copy(
+                        fontWeight = FontWeight.Black
+                    ),
+                    color = c.onPrimaryContainer
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text       = "次\n任务触发",
+                    style      = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color      = c.onPrimaryContainer.copy(alpha = 0.65f),
+                    modifier   = Modifier.padding(bottom = 5.dp),
+                    lineHeight = 20.sp
+                )
+            }
+
+            Spacer(Modifier.height(20.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                HeroChip(
+                    label = "${state.totalScripts} 个脚本",
+                    icon  = Icons.Default.Code,
+                    tint  = c.primary,
+                    bg    = c.primary.copy(alpha = 0.12f)
+                )
+                HeroChip(
+                    label = "${state.enabledTaskCount} 个计划任务",
+                    icon  = Icons.Default.Schedule,
+                    tint  = c.primary,
+                    bg    = c.primary.copy(alpha = 0.12f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroChip(label: String, icon: ImageVector, tint: Color, bg: Color) {
+    Surface(color = bg, shape = RoundedCornerShape(20.dp)) {
+        Row(
+            modifier             = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+            verticalAlignment    = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Icon(icon, contentDescription = null, modifier = Modifier.size(14.dp), tint = tint)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = tint, fontWeight = FontWeight.Bold)
+        }
     }
 }
 
 // =====================================================================================
-// 1. 守护服务状态卡
+// 2. 信息双列 —— 下次执行 + 状态摘要
 // =====================================================================================
 
 @Composable
-private fun ServiceHealthCard(
-    state: DashboardUiState,
-    onRestart: () -> Unit,
-    onViewLogs: () -> Unit
-) {
-    val statusColor = if (state.serviceRunning) StatusRunning else MaterialTheme.colorScheme.error
+private fun InfoRow(state: DashboardUiState, onStatClick: (String) -> Unit) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        modifier              = Modifier.fillMaxWidth()
+    ) {
+        NextRunCard(state.nextRun, Modifier.weight(1.05f)) { onStatClick("nextRun") }
+        StatusCard(state, Modifier.weight(1f)) { onStatClick("total") }
+    }
+}
 
-    val infiniteTransition = rememberInfiniteTransition()
-    val pulseAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.15f,
-        targetValue = 0.4f,
-        animationSpec = infiniteRepeatable(animation = tween(1200, easing = FastOutSlowInEasing), repeatMode = RepeatMode.Reverse)
-    )
+@Composable
+private fun NextRunCard(nextRun: NextRun, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c        = MaterialTheme.colorScheme
+    val hasTask  = nextRun.scriptName != "暂无调度任务"
 
     Card(
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = RoundedCornerShape(28.dp)
+        colors   = CardDefaults.cardColors(
+            containerColor = if (hasTask) c.tertiaryContainer else c.surfaceContainer
+        ),
+        shape    = RoundedCornerShape(28.dp),
+        modifier = modifier.expressiveClickable(onClick)
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(Modifier.padding(18.dp).fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier        = Modifier
+                        .size(34.dp)
+                        .background(
+                            if (hasTask) c.onTertiaryContainer.copy(alpha = 0.12f)
+                            else c.onSurface.copy(alpha = 0.08f),
+                            RoundedCornerShape(10.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint     = if (hasTask) c.onTertiaryContainer else c.onSurfaceVariant
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "下次执行",
+                    style      = MaterialTheme.typography.labelMedium,
+                    color      = if (hasTask) c.onTertiaryContainer.copy(alpha = 0.7f) else c.onSurfaceVariant,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(Modifier.height(14.dp))
+
+            Text(
+                text  = nextRun.time,
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                color = if (hasTask) c.onTertiaryContainer else c.onSurface
+            )
+
+            Spacer(Modifier.height(4.dp))
+
+            Text(
+                text     = if (hasTask) nextRun.scriptName else "无调度任务",
+                style    = MaterialTheme.typography.bodySmall,
+                color    = if (hasTask) c.onTertiaryContainer.copy(alpha = 0.65f) else c.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusCard(state: DashboardUiState, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    val c         = MaterialTheme.colorScheme
+    val hasFailed = state.failedCount > 0
+
+    Card(
+        colors   = CardDefaults.cardColors(
+            containerColor = if (hasFailed) c.errorContainer else c.secondaryContainer
+        ),
+        shape    = RoundedCornerShape(28.dp),
+        modifier = modifier.expressiveClickable(onClick)
+    ) {
+        Column(
+            Modifier.padding(18.dp).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier
-                        .size(24.dp)
-                        .background(statusColor.copy(alpha = if (state.serviceRunning) pulseAlpha else 0.2f), RoundedCornerShape(50)),
+                    modifier        = Modifier
+                        .size(34.dp)
+                        .background(
+                            if (hasFailed) c.onErrorContainer.copy(alpha = 0.12f)
+                            else c.onSecondaryContainer.copy(alpha = 0.12f),
+                            RoundedCornerShape(10.dp)
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    Box(Modifier.size(10.dp).background(statusColor, RoundedCornerShape(50)))
+                    Icon(
+                        if (hasFailed) Icons.Default.Warning else Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint     = if (hasFailed) c.onErrorContainer else c.onSecondaryContainer
+                    )
                 }
-                Spacer(Modifier.width(14.dp))
-                Column {
-                    Text("面板守护服务", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Text(if (state.serviceRunning) state.uptimeLabel else "服务已停止，点击重启", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    if (hasFailed) "执行异常" else "运行状态",
+                    style      = MaterialTheme.typography.labelMedium,
+                    color      = if (hasFailed) c.onErrorContainer.copy(alpha = 0.7f) else c.onSecondaryContainer.copy(alpha = 0.7f),
+                    fontWeight = FontWeight.Bold
+                )
             }
 
-            Row {
-                IconButton(onClick = onViewLogs) { Icon(Icons.Default.History, contentDescription = "查看日志") }
-                FilledIconButton(
-                    onClick = onRestart,
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = "重启服务")
-                }
+            Column {
+                Text(
+                    text  = if (hasFailed) "${state.failedCount}" else "正常",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black),
+                    color = if (hasFailed) c.onErrorContainer else c.onSecondaryContainer
+                )
+                Text(
+                    text  = if (hasFailed) "个失败任务" else "无异常",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (hasFailed) c.onErrorContainer.copy(alpha = 0.65f) else c.onSecondaryContainer.copy(alpha = 0.65f)
+                )
             }
         }
     }
 }
 
 // =====================================================================================
-// 2. 失败警示条
+// 3. 失败警示条（全宽，仅 failedCount > 0 时出现）
 // =====================================================================================
 
 @Composable
 private fun FailureBanner(count: Int, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth().expressiveClickable(onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer, contentColor = MaterialTheme.colorScheme.onErrorContainer),
+        colors   = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor   = MaterialTheme.colorScheme.onErrorContainer
+        ),
         shape = RoundedCornerShape(20.dp)
     ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Warning, contentDescription = null, modifier = Modifier.size(20.dp))
+        Row(
+            modifier          = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.Warning, null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
-            Text("$count 个脚本执行失败，点击查看详情", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-            Icon(Icons.Default.ChevronRight, contentDescription = null)
+            Text(
+                "$count 个脚本执行失败，点击查看详情",
+                style    = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            Icon(Icons.Default.ChevronRight, null)
         }
     }
 }
 
 // =====================================================================================
-// 3. KPI 网格
+// 4. 最近活动卡
 // =====================================================================================
 
 @Composable
-private fun StatGrid(state: DashboardUiState, onStatClick: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            StatCard("总脚本数", state.totalScripts.toString(), null, Icons.Default.Code, MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer, Modifier.weight(1f)) { onStatClick("total") }
-            StatCard("当前运行", state.runningNow.toString(), null, Icons.Default.PlayArrow, MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer, Modifier.weight(1f)) { onStatClick("running") }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            StatCard("今日触发", state.triggeredToday.toString(), null, Icons.Default.Speed, MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer, Modifier.weight(1f)) { onStatClick("triggered") }
-            StatCard("下次执行", state.nextRun.time, state.nextRun.scriptName, Icons.Default.Schedule, MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.colorScheme.onSurface, Modifier.weight(1f)) { onStatClick("nextRun") }
-        }
-    }
-}
-
-@Composable
-private fun StatCard(title: String, value: String, caption: String?, icon: ImageVector, containerColor: Color, contentColor: Color, modifier: Modifier = Modifier, onClick: () -> Unit = {}) {
+private fun RecentActivityCard(logs: List<LogEntry>, onViewAll: () -> Unit) {
     Card(
-        modifier = modifier.expressiveClickable(onClick),
-        colors = CardDefaults.cardColors(containerColor = containerColor, contentColor = contentColor),
-        shape = RoundedCornerShape(20.dp)
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(title, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(value, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Black))
-            if (caption != null) {
-                Spacer(Modifier.height(2.dp))
-                Text(caption, style = MaterialTheme.typography.bodySmall, color = contentColor.copy(alpha = 0.7f))
-            }
-        }
-    }
-}
-
-
-
-// =====================================================================================
-// 5. 终端日志卡
-// =====================================================================================
-
-@Composable
-private fun TerminalLogCard(logs: List<LogEntry>, onViewAll: () -> Unit) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = LogCardBg),
-        shape = RoundedCornerShape(28.dp),
+        colors   = CardDefaults.cardColors(containerColor = LogCardBg),
+        shape    = RoundedCornerShape(28.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(Modifier.padding(20.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("最近执行动态", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = LogCardHeaderText, modifier = Modifier.weight(1f))
+                Row(
+                    verticalAlignment    = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier             = Modifier.weight(1f)
+                ) {
+                    Surface(
+                        color = TerminalInfo.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Terminal,
+                            contentDescription = null,
+                            tint     = TerminalInfo,
+                            modifier = Modifier.padding(6.dp).size(14.dp)
+                        )
+                    }
+                    Text(
+                        "最近执行动态",
+                        style      = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color      = LogCardHeaderText
+                    )
+                }
                 if (logs.isNotEmpty()) {
-                    TextButton(onClick = onViewAll) {
-                        Text("查看全部", color = TerminalInfo, style = MaterialTheme.typography.labelMedium)
+                    TextButton(
+                        onClick        = onViewAll,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Text("全部日志", color = TerminalInfo, style = MaterialTheme.typography.labelSmall)
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint     = TerminalInfo
+                        )
                     }
                 }
             }
-            Spacer(Modifier.height(8.dp))
-            
-            // 空状态保护
+
+            Spacer(Modifier.height(12.dp))
+
             if (logs.isEmpty()) {
-                Text(
-                    "暂无任何脚本执行记录",
-                    color = LogCardMutedText,
-                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
-                    modifier = Modifier.padding(vertical = 12.dp)
-                )
+                Box(
+                    Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint     = LogCardMutedText,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "暂无执行记录",
+                            color    = LogCardMutedText,
+                            style    = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace)
+                        )
+                    }
+                }
             } else {
-                logs.forEachIndexed { index, entry ->
-                    LogLine(entry)
-                    if (index != logs.lastIndex) Spacer(Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    logs.forEachIndexed { index, entry ->
+                        ActivityLogRow(entry)
+                        if (index != logs.lastIndex) {
+                            HorizontalDivider(
+                                color     = LogCardMutedText.copy(alpha = 0.15f),
+                                thickness = 0.5.dp
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -319,26 +484,70 @@ private fun TerminalLogCard(logs: List<LogEntry>, onViewAll: () -> Unit) {
 }
 
 @Composable
-private fun LogLine(entry: LogEntry) {
+private fun ActivityLogRow(entry: LogEntry) {
     val (icon, color) = when (entry.status) {
         LogStatus.SUCCESS -> Icons.Default.CheckCircle to TerminalSuccess
-        LogStatus.RUNNING -> Icons.Default.PlayArrow to TerminalInfo
-        LogStatus.FAILED -> Icons.Default.Cancel to TerminalError
+        LogStatus.RUNNING -> Icons.Default.PlayArrow   to TerminalInfo
+        LogStatus.FAILED  -> Icons.Default.Cancel      to TerminalError
     }
+
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(14.dp))
-        Spacer(Modifier.width(8.dp))
-        Text("[${entry.time}] ${entry.scriptName} -> ${entry.message}", color = color, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace, fontSize = 11.sp))
+        Icon(
+            icon,
+            contentDescription = null,
+            tint     = color,
+            modifier = Modifier.size(15.dp)
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment     = Alignment.CenterVertically
+            ) {
+                Text(
+                    entry.scriptName,
+                    color    = color,
+                    style    = MaterialTheme.typography.bodySmall.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    entry.time,
+                    color  = LogCardMutedText,
+                    style  = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    maxLines = 1
+                )
+            }
+            Text(
+                entry.message,
+                color  = color.copy(alpha = 0.6f),
+                style  = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                maxLines = 1
+            )
+        }
     }
 }
 
 // =====================================================================================
-// 触感反馈
+// 弹性点击效果
 // =====================================================================================
 
 private fun Modifier.expressiveClickable(onClick: () -> Unit): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(targetValue = if (pressed) 0.96f else 1f, animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
-    this.graphicsLayer { scaleX = scale; scaleY = scale }.clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
+    val scale by animateFloatAsState(
+        targetValue   = if (pressed) 0.96f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+        label         = "scale"
+    )
+    this
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .clip(RoundedCornerShape(28.dp))
+        .clickable(interactionSource = interactionSource, indication = null, onClick = onClick)
 }

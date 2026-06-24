@@ -104,12 +104,12 @@ fun MainScreen() {
             }
 
             DashboardUiState(
-                serviceRunning = true,
-                uptimeLabel    = "服务运行中",
-                totalScripts   = dbScripts.size,
-                triggeredToday = triggeredToday,
-                nextRun        = nextRun,
-                recentLogs     = logEntries
+                totalScripts     = dbScripts.size,
+                enabledTaskCount = dbTasks.count { it.isEnabled },
+                triggeredToday   = triggeredToday,
+                failedCount      = logEntries.count { it.status == LogStatus.FAILED },
+                nextRun          = nextRun,
+                recentLogs       = logEntries
             )
         }
     }
@@ -265,14 +265,9 @@ fun MainScreen() {
         Crossfade(targetState = currentRoute, label = "Route Transition") { route ->
             when (route) {
                 "Dashboard"      -> DashboardScreen(
-                    state              = dashboardState,
-                    contentPadding     = innerPadding,
-                    onRestartService   = {
-                        ScriptForegroundService.stop(context)
-                        ScriptForegroundService.start(context, "面板守护服务已重启")
-                    },
-                    onViewServiceLogs  = { showGlobalLog = true },
-                    onViewAllLogs      = { showGlobalLog = true }
+                    state          = dashboardState,
+                    contentPadding = innerPadding,
+                    onViewAllLogs  = { showGlobalLog = true }
                 )
                 "ScriptManager"  -> ScriptManagerScreen(
                     contentPadding = innerPadding,
