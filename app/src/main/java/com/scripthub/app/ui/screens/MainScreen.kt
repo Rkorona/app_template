@@ -311,15 +311,20 @@ fun MainScreen() {
 
     folderBrowserTarget?.let { folder ->
         FolderFileBrowserSheet(
-            folderName   = folder.name,
-            entryPoint   = folder.entryPoint,
-            onDismiss    = { folderBrowserTarget = null },
-            onSelectFile = { relPath ->
-                editingFileName   = folder.name
-                editingIsFolder   = true
-                editingEntryPoint = relPath
+            folderName          = folder.name,
+            entryPoint          = folder.entryPoint,
+            onDismiss           = { folderBrowserTarget = null },
+            onSelectFile        = { relPath ->
+                editingFileName     = folder.name
+                editingIsFolder     = true
+                editingEntryPoint   = relPath
                 folderBrowserTarget = null
                 navigateTo("ScriptEditor")
+            },
+            onEntryPointChanged = { newEntry ->
+                scope.launch(Dispatchers.IO) {
+                    db.scriptDao().updateEntryPoint(folder.name, newEntry)
+                }
             }
         )
     }

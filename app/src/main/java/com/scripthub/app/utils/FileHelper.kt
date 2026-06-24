@@ -96,6 +96,41 @@ object FileHelper {
         }
     }
 
+    // ── 文件夹工程内部操作 ──────────────────────────────────────
+
+    /** 在文件夹工程内创建一个新文件（relPath 为相对于工程根的路径，如 "src/utils.py"） */
+    fun createFileInFolder(folderName: String, relPath: String): Boolean {
+        return try {
+            val file = File(scriptsDir, "$folderName/$relPath")
+            if (!file.parentFile!!.exists()) file.parentFile!!.mkdirs()
+            if (!file.exists()) file.createNewFile() else false
+        } catch (e: Exception) { false }
+    }
+
+    /** 在文件夹工程内创建一个子目录 */
+    fun createSubfolderInFolder(folderName: String, relPath: String): Boolean {
+        return try {
+            File(scriptsDir, "$folderName/$relPath").mkdirs()
+        } catch (e: Exception) { false }
+    }
+
+    /** 重命名文件夹工程内的一个文件或目录，返回实际新名（可能含路径变化） */
+    fun renameInFolder(folderName: String, oldRelPath: String, newRelPath: String): Boolean {
+        return try {
+            val src = File(scriptsDir, "$folderName/$oldRelPath")
+            val dst = File(scriptsDir, "$folderName/$newRelPath")
+            if (!dst.parentFile!!.exists()) dst.parentFile!!.mkdirs()
+            src.renameTo(dst)
+        } catch (e: Exception) { false }
+    }
+
+    /** 删除文件夹工程内的一个文件或子目录 */
+    fun deleteFromFolder(folderName: String, relPath: String): Boolean {
+        return try {
+            File(scriptsDir, "$folderName/$relPath").deleteRecursively()
+        } catch (e: Exception) { false }
+    }
+
     private fun detectEntryPoint(folder: File): String {
         val candidates = listOf("main.py", "index.js", "main.js", "server.js", "crawl.py")
         for (c in candidates) {

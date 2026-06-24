@@ -104,4 +104,7 @@ interface ScriptDao {
 
     @Query("UPDATE scripts SET trigger = :trigger WHERE name = :name")
     suspend fun updateTrigger(name: String, trigger: String)
+
+    @Query("UPDATE scripts SET entryPoint = :entryPoint WHERE name = :name")
+    suspend fun updateEntryPoint(name: String, entryPoint: String)
 }
