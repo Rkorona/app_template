@@ -1,0 +1,59 @@
+﻿2026-06-25T02:10:38.7031962Z ##[group]Run ./gradlew assembleRelease
+./gradlew assembleRelease
+shell: /usr/bin/bash -e {0}
+env:
+  JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+  JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.11-10/x64
+  KEYSTORE_PATH: ***.jks
+  KEY_STORE_PASSWORD: ***
+  ALIAS: ***
+  KEY_PASSWORD: ***
+Fetching distribution.
+Downloading https://services.gradle.org/distributions/gradle-9.5.1-bin.zip
+.............10%.............20%..............30%.............40%.............50%..............60%.............70%..............80%.............90%.............100%
+
+Welcome to Gradle 9.5.1!
+
+Here are the highlights of this ***:
+ - Task provenance in reports and failure messages
+ - Type-safe accessors for precompiled Kotlin Settings plugins
+
+For more details see https://docs.gradle.org/9.5.1/***-notes.html
+
+Starting a Gradle Daemon (subsequent builds will be faster)
+Calculating task graph as no cached configuration is available for tasks: assembleRelease
+
+
+1 problem was found storing the configuration cache.
+FAILURE: Build failed with an exception.
+
+- Task `:app:mergeReleaseNativeLibs` of type `com.android.build.gradle.internal.tasks.MergeNativeLibsTask`: error writing value of type 'org.gradle.api.internal.artifacts.configurations.ResolutionBackedFileCollection'
+
+* What went wrong:
+Configuration cache state could not be cached: field `collection` of `org.gradle.internal.serialize.codecs.core.FilteredFileCollectionSpec` bean found in field `__externalLibNativeLibs__` of task `:app:mergeReleaseNativeLibs` of type `com.android.build.gradle.internal.tasks.MergeNativeLibsTask`: error writing value of type 'org.gradle.api.internal.artifacts.configurations.ResolutionBackedFileCollection'
+> Could not resolve all files for configuration ':app:***RuntimeClasspath'.
+   > Could not find io.github.rosemoe.sora-editor:editor:0.23.4.
+     Searched in the following locations:
+       - https://dl.google.com/dl/android/maven2/io/github/rosemoe/sora-editor/editor/0.23.4/editor-0.23.4.pom
+       - https://repo.maven.apache.org/maven2/io/github/rosemoe/sora-editor/editor/0.23.4/editor-0.23.4.pom
+     Required by:
+         project ':app'
+   > Could not find io.github.rosemoe.sora-editor:language-textmate:0.23.4.
+     Searched in the following locations:
+       - https://dl.google.com/dl/android/maven2/io/github/rosemoe/sora-editor/language-textmate/0.23.4/language-textmate-0.23.4.pom
+       - https://repo.maven.apache.org/maven2/io/github/rosemoe/sora-editor/language-textmate/0.23.4/language-textmate-0.23.4.pom
+     Required by:
+         project ':app'
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 1m 8s
+See the complete report at file:///home/runner/work/ScriptHub/ScriptHub/build/reports/configuration-cache/4cvo0dk23rzz34dkf7wmoqvqt/b57dkc6v8iprwd5id3a0brcqg/configuration-cache-report.html
+
+[Incubating] Problems report is available at: file:///home/runner/work/ScriptHub/ScriptHub/build/reports/problems/problems-report.html
+Configuration cache entry discarded due to serialization error.
+Process completed with exit code 1.

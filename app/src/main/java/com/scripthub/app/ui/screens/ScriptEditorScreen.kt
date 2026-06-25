@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,6 +16,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.scripthub.app.ui.components.SoraEditorView
+import com.scripthub.app.ui.components.TerminalConsoleBottomSheet
 import com.scripthub.app.utils.FileHelper
 import io.github.rosemoe.sora.widget.CodeEditor
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +67,7 @@ fun ScriptEditorScreen(
     var initialContent by remember { mutableStateOf("") }
     var isFileLoaded   by remember { mutableStateOf(false) }
     var isSaving       by remember { mutableStateOf(false) }
+    var showTerminal   by remember { mutableStateOf(false) }
 
     // 编辑器实例引用，用于保存时读取内容
     val editorRef = remember { mutableStateOf<CodeEditor?>(null) }
@@ -143,6 +146,36 @@ fun ScriptEditorScreen(
                     }
                 },
                 actions = {
+                    // ── Run button: save then launch terminal ──────────────
+                    FilledIconButton(
+                        onClick = {
+                            if (isSaving) return@FilledIconButton
+                            isSaving = true
+                            val content = editorRef.value?.text?.toString() ?: ""
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    FileHelper.writeScriptContent(
+                                        fileName, isFolder, entryPoint, content
+                                    )
+                                }
+                                isSaving = false
+                                showTerminal = true
+                            }
+                        },
+                        enabled  = isFileLoaded,
+                        colors   = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = colors.primary,
+                            contentColor   = colors.onPrimary
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.PlayArrow,
+                            contentDescription = "运行",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // ── Save button ────────────────────────────────────────
                     FilledTonalButton(
                         onClick = {
                             isSaving = true
@@ -164,9 +197,9 @@ fun ScriptEditorScreen(
                     ) {
                         if (isSaving) {
                             CircularProgressIndicator(
-                                modifier  = Modifier.size(14.dp),
+                                modifier    = Modifier.size(14.dp),
                                 strokeWidth = 2.dp,
-                                color     = colors.onSecondaryContainer
+                                color       = colors.onSecondaryContainer
                             )
                         } else {
                             Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
@@ -241,5 +274,13 @@ fun ScriptEditorScreen(
                     .padding(innerPadding)
             )
         }
+    }
+
+    if (showTerminal) {
+        TerminalConsoleBottomSheet(
+            taskName   = fileName,
+            scriptName = if (isFolder) entryPoint else fileName,
+            onDismiss  = { showTerminal = false }
+        )
     }
 }
