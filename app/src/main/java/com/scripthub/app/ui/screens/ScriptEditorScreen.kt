@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
@@ -42,65 +44,147 @@ enum class EditorLang(val label: String, val scopeName: String?) {
 }
 
 private fun detectLang(name: String): EditorLang = when {
-    name.endsWith(".py",   true) || name.endsWith(".pyw", true)             -> EditorLang.PYTHON
-    name.endsWith(".sh",   true) || name.endsWith(".bash", true)            -> EditorLang.SHELL
+    name.endsWith(".py",   true) || name.endsWith(".pyw", true)          -> EditorLang.PYTHON
+    name.endsWith(".sh",   true) || name.endsWith(".bash", true)         -> EditorLang.SHELL
     name.endsWith(".js",   true) || name.endsWith(".mjs", true) ||
-    name.endsWith(".cjs",  true) || name.endsWith(".ts",  true)             -> EditorLang.JAVASCRIPT
-    else                                                                     -> EditorLang.PLAIN
+    name.endsWith(".cjs",  true) || name.endsWith(".ts",  true)          -> EditorLang.JAVASCRIPT
+    else                                                                  -> EditorLang.PLAIN
 }
 
 // ──────────────────────────────────────────────────────────────────
-// 工具栏按钮
+// 工具栏按钮 — 重新设计
 // ──────────────────────────────────────────────────────────────────
 
+/**
+ * 普通工具栏按钮：图标 + 标签，无背景，onSurfaceVariant 色调。
+ * 只有 Run 按钮走 [RunToolbarAction] 获得填充容器高亮。
+ */
 @Composable
 private fun ToolbarAction(
-    icon: ImageVector,
-    label: String,
+    icon:    ImageVector,
+    label:   String,
     enabled: Boolean = true,
-    tinted: Boolean = false,
     onClick: () -> Unit
 ) {
-    val color = if (tinted) MaterialTheme.colorScheme.primary
-                else        MaterialTheme.colorScheme.onSurface
+    val contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
         modifier = Modifier
-            .height(54.dp)
-            .widthIn(min = 46.dp)
-            .alpha(if (enabled) 1f else 0.4f)
+            .height(58.dp)
+            .widthIn(min = 48.dp)
+            .alpha(if (enabled) 1f else 0.38f)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .padding(horizontal = 6.dp)
+            .padding(horizontal = 4.dp)
     ) {
-        Icon(icon, contentDescription = label, tint = color, modifier = Modifier.size(21.dp))
-        Spacer(Modifier.height(2.dp))
-        Text(label, fontSize = 9.5.sp, fontWeight = FontWeight.Medium, color = color, maxLines = 1)
+        Icon(
+            imageVector        = icon,
+            contentDescription = label,
+            tint               = contentColor,
+            modifier           = Modifier.size(22.dp)
+        )
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text       = label,
+            fontSize   = 9.5.sp,
+            fontWeight = FontWeight.Medium,
+            color      = contentColor,
+            maxLines   = 1
+        )
+    }
+}
+
+/**
+ * 运行按钮：M3 Expressive 风格 — 图标放在 primaryContainer 圆角胶囊中，
+ * 文字用 primary 色，与普通按钮形成层级感，但不破坏整体节奏。
+ */
+@Composable
+private fun RunToolbarAction(
+    enabled: Boolean = true,
+    isSaving: Boolean = false,
+    onClick: () -> Unit
+) {
+    val colors = MaterialTheme.colorScheme
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+        modifier = Modifier
+            .height(58.dp)
+            .widthIn(min = 52.dp)
+            .alpha(if (enabled) 1f else 0.38f)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 4.dp)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = colors.primaryContainer,
+            modifier = Modifier.size(width = 36.dp, height = 26.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                if (isSaving) {
+                    CircularProgressIndicator(
+                        modifier  = Modifier.size(14.dp),
+                        color     = colors.onPrimaryContainer,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector        = Icons.Default.PlayArrow,
+                        contentDescription = "运行",
+                        tint               = colors.onPrimaryContainer,
+                        modifier           = Modifier.size(17.dp)
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(3.dp))
+        Text(
+            text       = "运行",
+            fontSize   = 9.5.sp,
+            fontWeight = FontWeight.SemiBold,
+            color      = colors.primary,
+            maxLines   = 1
+        )
     }
 }
 
 // ──────────────────────────────────────────────────────────────────
-// 代码键盘按键
+// 代码键盘按键 — 重新设计（M3 Expressive 键帽样式）
 // ──────────────────────────────────────────────────────────────────
 
 @Composable
-private fun CodeKey(label: String, wide: Boolean = false, onClick: () -> Unit) {
-    val colors = MaterialTheme.colorScheme
-    Box(
-        contentAlignment = Alignment.Center,
+private fun CodeKey(
+    label:    String,
+    wide:     Boolean  = false,
+    special:  Boolean  = false,   // fn / ⊞ 等功能键
+    onClick:  () -> Unit
+) {
+    val colors     = MaterialTheme.colorScheme
+    val bgColor    = if (special) colors.surfaceContainerHighest else colors.surfaceContainerHigh
+    val labelColor = if (special) colors.onSurface               else colors.onSurfaceVariant
+
+    Surface(
+        onClick = onClick,
+        shape   = RoundedCornerShape(7.dp),
+        color   = bgColor,
+        shadowElevation = if (special) 0.dp else 0.dp,
         modifier = Modifier
-            .height(38.dp)
-            .then(if (wide) Modifier.width(56.dp) else Modifier.widthIn(min = 44.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp)
+            .height(34.dp)
+            .then(if (wide) Modifier.width(54.dp) else Modifier.widthIn(min = 40.dp))
     ) {
-        Text(
-            label,
-            fontSize   = 12.sp,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-            color      = colors.onSurface
-        )
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier         = Modifier.padding(horizontal = 6.dp)
+        ) {
+            Text(
+                text       = label,
+                fontSize   = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = if (special) FontWeight.SemiBold else FontWeight.Medium,
+                color      = labelColor
+            )
+        }
     }
 }
 
@@ -191,43 +275,54 @@ fun ScriptEditorScreen(
     val colors = MaterialTheme.colorScheme
 
     Scaffold(
+
         // ── TopBar：工具栏 + 文件标签 ─────────────────────────────────
         topBar = {
-            Surface(color = colors.surface, shadowElevation = 2.dp) {
+            // M3: surfaceContainer 比 surface 更有层次感，替代旧的 shadowElevation
+            Surface(
+                color          = colors.surfaceContainer,
+                tonalElevation = 0.dp
+            ) {
                 Column {
                     // ── 工具栏行 ─────────────────────────────────────
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
+                        modifier          = Modifier
                             .fillMaxWidth()
                             .statusBarsPadding()
                     ) {
                         // 左组：文件 编辑 调试 终端 其他
                         Row(modifier = Modifier.weight(1f)) {
-                            ToolbarAction(Icons.Default.FolderOpen,  "文件") { onBack() }
-                            ToolbarAction(Icons.Default.Edit,         "编辑") {
+                            ToolbarAction(Icons.Default.FolderOpen, "文件") { onBack() }
+                            ToolbarAction(Icons.Default.Edit, "编辑") {
                                 Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                             }
-                            ToolbarAction(Icons.Default.BugReport,   "调试") {
+                            ToolbarAction(Icons.Default.BugReport, "调试") {
                                 Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                             }
-                            ToolbarAction(Icons.Default.Terminal,    "终端") {
+                            ToolbarAction(Icons.Default.Terminal, "终端") {
                                 Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                             }
-                            ToolbarAction(Icons.Default.MoreHoriz,   "其他") {
+                            ToolbarAction(Icons.Default.MoreHoriz, "其他") {
                                 Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                             }
                         }
 
-                        VerticalDivider(modifier = Modifier.height(36.dp))
+                        // 分隔线
+                        VerticalDivider(
+                            modifier = Modifier.height(32.dp),
+                            color    = colors.outlineVariant
+                        )
 
-                        // 右组：日志 运行 撤销 重做 保存
+                        // 右组：日志  [运行]  撤销  重做  保存
                         Row {
-                            ToolbarAction(Icons.Default.Article,  "日志") { showTerminal = true }
-                            ToolbarAction(
-                                Icons.Default.PlayArrow, "运行",
-                                enabled = isFileLoaded, tinted = true
+                            ToolbarAction(Icons.Default.Article, "日志") { showTerminal = true }
+
+                            RunToolbarAction(
+                                enabled  = isFileLoaded,
+                                isSaving = isSaving
                             ) { runScript() }
+
                             ToolbarAction(Icons.Default.Undo, "撤销", enabled = isFileLoaded) {
                                 editorRef.value?.undo()
                             }
@@ -235,130 +330,145 @@ fun ScriptEditorScreen(
                                 editorRef.value?.redo()
                             }
                             ToolbarAction(
-                                if (isSaving) Icons.Default.HourglassEmpty else Icons.Default.Save,
-                                "保存",
+                                Icons.Default.Save, "保存",
                                 enabled = isFileLoaded && !isSaving
                             ) { saveFile() }
                         }
                     }
 
-                    HorizontalDivider()
+                    HorizontalDivider(color = colors.outlineVariant)
 
                     // ── 文件标签行 ───────────────────────────────────
+                    // 设计：filename 标签 + primary 下划线；右侧单行显示「Ln X · LANG」
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
+                        modifier          = Modifier
                             .fillMaxWidth()
-                            .padding(start = 14.dp, end = 14.dp, top = 0.dp)
+                            .padding(start = 14.dp, end = 12.dp)
+                            .height(38.dp)
                     ) {
-                        // 文件名 + 下划线（使用 TabRow 风格 inline）
-                        Column(modifier = Modifier.weight(1f)) {
+                        // 文件名 + 下划线（与 image 1 参考一致）
+                        Column(
+                            modifier = Modifier.wrapContentWidth()
+                        ) {
                             Text(
                                 text       = displayName,
                                 style      = MaterialTheme.typography.bodyMedium,
                                 fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Medium,
-                                modifier   = Modifier.padding(top = 7.dp, bottom = 4.dp)
+                                fontWeight = FontWeight.SemiBold,
+                                color      = colors.onSurface,
+                                modifier   = Modifier.padding(top = 6.dp, bottom = 3.dp)
                             )
-                            // Primary 色下划线，宽度与文字宽度自动匹配
+                            // primary 色下划线，宽度与文字自动匹配
                             Box(
                                 modifier = Modifier
                                     .wrapContentWidth(Alignment.Start)
-                                    .height(2.5.dp)
-                                    .background(
-                                        color = colors.primary,
-                                        shape = MaterialTheme.shapes.small
-                                    )
+                                    .height(2.dp)
+                                    .clip(RoundedCornerShape(1.dp))
+                                    .background(colors.primary)
                             ) {
                                 // 透明文字撑开宽度
                                 Text(
                                     text       = displayName,
                                     style      = MaterialTheme.typography.bodyMedium,
                                     fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Medium,
+                                    fontWeight = FontWeight.SemiBold,
                                     modifier   = Modifier.alpha(0f)
                                 )
                             }
-                            Spacer(Modifier.height(5.dp))
                         }
 
-                        // 右侧：行列信息 & 语言标签
-                        Column(horizontalAlignment = Alignment.End) {
+                        Spacer(Modifier.weight(1f))
+
+                        // 右侧：单行「Ln X · LANG」—— 比原来的竖排更紧凑
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             Text(
-                                text  = "Ln $lineCount",
-                                fontSize = 10.sp,
-                                color = colors.onSurfaceVariant,
-                                fontFamily = FontFamily.Monospace
+                                text       = "Ln $lineCount",
+                                fontSize   = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                color      = colors.onSurfaceVariant
                             )
+                            // 点分隔
                             Text(
-                                text  = lang.label,
+                                text  = "·",
                                 fontSize = 10.sp,
-                                color = colors.primary,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                color = colors.outlineVariant
                             )
+                            // 语言标签：小型 outlined 胶囊，比纯文字更有层次
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = colors.primaryContainer.copy(alpha = 0.6f)
+                            ) {
+                                Text(
+                                    text       = lang.label,
+                                    fontSize   = 9.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color      = colors.primary,
+                                    modifier   = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
                         }
                     }
 
-                    HorizontalDivider()
+                    HorizontalDivider(color = colors.outlineVariant)
                 }
             }
         },
 
-        // ── BottomBar：代码键盘 ───────────────────────────────────────
+        // ── BottomBar：代码键盘（M3 Expressive 键帽样式）────────────────
         bottomBar = {
             Surface(color = colors.surfaceContainerLow) {
                 Column(modifier = Modifier.navigationBarsPadding()) {
-                    HorizontalDivider()
+                    HorizontalDivider(color = colors.outlineVariant)
 
-                    // ── 第一行：功能键 + 符号 ─────────────────────────
+                    // ── 第一行：fn / ESC / ↑ / TAB + 常用符号 ──────────
                     Row(
-                        modifier          = Modifier
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment     = Alignment.CenterVertically,
+                        modifier              = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        CodeKey("fn", wide = true) {
+                        CodeKey("fn",  wide = true, special = true) {
                             Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                         }
-                        VerticalDivider(Modifier.height(24.dp))
-                        CodeKey("ESC", wide = true) {
+                        CodeKey("ESC", wide = true, special = true) {
                             val imm = context.getSystemService(InputMethodManager::class.java)
                             imm.hideSoftInputFromWindow(editorRef.value?.windowToken, 0)
                         }
-                        VerticalDivider(Modifier.height(24.dp))
-                        CodeKey("↑") { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
-                        VerticalDivider(Modifier.height(24.dp))
-                        CodeKey("TAB", wide = true) { editorRef.value?.typeText("    ") }
-                        VerticalDivider(Modifier.height(24.dp))
+                        CodeKey("↑",   special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
+                        CodeKey("TAB", wide = true, special = true) { editorRef.value?.typeText("    ") }
+
                         listOf("(", ")", "/", "=", ",", ";", "\"", "'").forEach { sym ->
                             CodeKey(sym) { editorRef.value?.typeText(sym) }
-                            VerticalDivider(Modifier.height(24.dp))
                         }
                     }
 
-                    HorizontalDivider()
+                    HorizontalDivider(color = colors.outlineVariant)
 
-                    // ── 第二行：光标 + 括号符号 ───────────────────────
+                    // ── 第二行：⊞ / 光标 + 括号符号 ─────────────────────
                     Row(
-                        modifier          = Modifier
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment     = Alignment.CenterVertically,
+                        modifier              = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        verticalAlignment = Alignment.CenterVertically
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        CodeKey("⊞", wide = true) {
+                        CodeKey("⊞",  wide = true, special = true) {
                             Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                         }
-                        VerticalDivider(Modifier.height(24.dp))
-                        CodeKey("←") { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_LEFT) }
-                        VerticalDivider(Modifier.height(24.dp))
-                        CodeKey("↓") { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
-                        VerticalDivider(Modifier.height(24.dp))
-                        CodeKey("→") { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_RIGHT) }
-                        VerticalDivider(Modifier.height(24.dp))
+                        CodeKey("←",  special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_LEFT) }
+                        CodeKey("↓",  special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
+                        CodeKey("→",  special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_RIGHT) }
+
                         listOf("{", "}", "[", "]", "`", "<", ">", "-", "!").forEach { sym ->
                             CodeKey(sym) { editorRef.value?.typeText(sym) }
-                            VerticalDivider(Modifier.height(24.dp))
                         }
                     }
                 }
@@ -378,8 +488,11 @@ fun ScriptEditorScreen(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator(color = colors.primary)
                     Spacer(Modifier.height(12.dp))
-                    Text("加载中…", color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "加载中…",
+                        color = colors.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         } else {
