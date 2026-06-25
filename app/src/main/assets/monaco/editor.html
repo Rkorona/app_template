@@ -252,6 +252,20 @@ function initEditor() {
     AndroidBridge.onEditorFocused();
   });
 
+  // ── 选区变化 → 通知 Kotlin，用于显示剪切/复制/粘贴工具栏 ────────
+  window.editor.onDidChangeCursorSelection(function () {
+    var selection = window.editor.getSelection();
+    var hasSelection = !selection.isEmpty();
+    var b64 = '';
+    if (hasSelection) {
+      try {
+        var text = window.editor.getModel().getValueInRange(selection);
+        b64 = btoa(unescape(encodeURIComponent(text)));
+      } catch (e) { b64 = ''; }
+    }
+    AndroidBridge.onSelectionChanged(hasSelection, b64);
+  });
+
   scheduleLayout();
   startLayoutPolling();
 
@@ -328,6 +342,20 @@ function typeText(base64) {
   } catch (e) {
     console.error('typeText error', e);
   }
+}
+
+/** 删除当前选区（用于剪切操作） */
+function deleteSelection() {
+  var selection = window.editor.getSelection();
+  if (!selection.isEmpty()) {
+    window.editor.executeEdits('cut', [{ range: selection, text: '', forceMoveMarkers: true }]);
+  }
+}
+
+/** 全选 */
+function selectAllText() {
+  var model = window.editor.getModel();
+  window.editor.setSelection(model.getFullModelRange());
 }
 
 /** 撤销 */

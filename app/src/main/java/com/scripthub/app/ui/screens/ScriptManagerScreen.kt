@@ -17,14 +17,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,6 +59,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class DependencyStatus { None, Configured, Installed, Error }
+
+/** 根据文件扩展名返回对应的 Material 图标 */
+private fun scriptIcon(script: ScriptEntity): ImageVector {
+    if (script.isFolder) return Icons.Default.Folder
+    val ext = script.name.substringAfterLast(".", "").lowercase()
+    return when (ext) {
+        "py", "pyw"                     -> Icons.Default.Terminal
+        "js", "mjs", "cjs"             -> Icons.Default.Code
+        "ts", "mts", "cts"             -> Icons.Default.Code
+        "html", "htm"                   -> Icons.Default.Language
+        "css", "scss", "sass", "less"  -> Icons.Default.Language
+        "json", "yaml", "yml", "toml",
+        "ini", "env"                    -> Icons.Default.Storage
+        "md", "markdown", "mdx"        -> Icons.Default.Article
+        "sh", "bash", "zsh", "fish"    -> Icons.Default.Terminal
+        "sql"                           -> Icons.Default.Storage
+        "kt", "kts", "java"            -> Icons.Default.Code
+        else                            -> Icons.Default.Description
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -646,7 +672,7 @@ fun ScriptCard(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector        = if (script.isFolder) Icons.Default.Folder else Icons.Default.Terminal,
+                            imageVector        = scriptIcon(script),
                             contentDescription = null,
                             tint               = themeColor,
                             modifier           = Modifier.size(20.dp)

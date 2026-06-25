@@ -110,20 +110,44 @@ class ScriptViewModel(application: Application) : AndroidViewModel(application) 
 
     private fun inferScriptType(pItem: FileHelper.PhysicalItem): String {
         val nodeExts = setOf("js", "mjs", "cjs")
+        val tsExts   = setOf("ts", "mts", "cts")
+        val cssExts  = setOf("css", "scss", "sass", "less")
+        val cfgExts  = setOf("json", "yaml", "yml", "toml", "ini", "env")
+        val mdExts   = setOf("md", "markdown", "mdx")
+        val shExts   = setOf("sh", "bash", "zsh", "fish")
+        val sqlExts  = setOf("sql")
+        val ktExts   = setOf("kt", "kts")
         val entryExt = pItem.entryPoint.substringAfterLast(".", "").lowercase()
         val nameExt  = pItem.name.substringAfterLast(".", "").lowercase()
+        val ext = if (entryExt.isNotEmpty()) entryExt else nameExt
         return when {
-            entryExt in nodeExts || nameExt in nodeExts -> "Node.js"
-            entryExt == "py"     || nameExt == "py"     -> "Python"
-            entryExt == "sh"     || nameExt == "sh"     -> "Shell"
+            ext in nodeExts              -> "Node.js"
+            ext == "py" || ext == "pyw" -> "Python"
+            ext in shExts               -> "Shell"
+            ext in tsExts               -> "TypeScript"
+            ext == "html" || ext == "htm" -> "HTML"
+            ext in cssExts              -> "CSS"
+            ext in cfgExts              -> "Config"
+            ext in mdExts               -> "Markdown"
+            ext in ktExts               -> "Kotlin"
+            ext == "java"               -> "Java"
+            ext in sqlExts              -> "SQL"
             else -> "Other"
         }
     }
 
     private fun typeToColorHex(type: String): String = when (type) {
-        "Python"  -> "#38BDF8"
-        "Node.js" -> "#A855F7"
-        "Shell"   -> "#22C55E"
-        else      -> "#94A3B8"
+        "Python"     -> "#38BDF8"
+        "Node.js"    -> "#A855F7"
+        "Shell"      -> "#22C55E"
+        "TypeScript" -> "#3B82F6"
+        "HTML"       -> "#F97316"
+        "CSS"        -> "#EC4899"
+        "Config"     -> "#F59E0B"
+        "Markdown"   -> "#64748B"
+        "Kotlin"     -> "#E97627"
+        "Java"       -> "#F59E0B"
+        "SQL"        -> "#06B6D4"
+        else         -> "#94A3B8"
     }
 }

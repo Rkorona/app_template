@@ -94,6 +94,12 @@ class MonacoEditorController(private val webView: WebView) {
     /** 光标移动：left | right | up | down */
     fun moveCursor(direction: String) = evalJs("moveCursor('$direction')")
 
+    /** 删除当前选区（剪切时使用） */
+    fun deleteSelection() = evalJs("deleteSelection()")
+
+    /** 全选 */
+    fun selectAll() = evalJs("selectAllText()")
+
     /** 聚焦编辑器并弹出系统键盘 */
     fun focus() {
         evalJs("focusEditor()")
@@ -125,7 +131,8 @@ private class MonacoBridge(
     private val onStatsChanged: (lines: Int, chars: Int) -> Unit,
     private val onCursorChanged: (line: Int, col: Int) -> Unit,
     private val onReady: () -> Unit,
-    private val onError: (String) -> Unit
+    private val onError: (String) -> Unit,
+    private val onSelectionChanged: (hasSelection: Boolean, selectedText: String) -> Unit = { _, _ -> }
 ) {
     private val main = Handler(Looper.getMainLooper())
 
@@ -155,6 +162,15 @@ private class MonacoBridge(
         Log.e(TAG, "Monaco 错误: $message")
         main.post { onError.invoke(message) }
     }
+
+    @JavascriptInterface
+    fun onSelectionChanged(hasSelection: Boolean, base64Text: String) {
+        val text = if (hasSelection && base64Text.isNotEmpty()) {
+            try { String(Base64.decode(base64Text, Base64.DEFAULT), Charsets.UTF_8) }
+            catch (e: Exception) { "" }
+        } else ""
+        main.post { onSelectionChanged.invoke(hasSelection, text) }
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────
@@ -178,6 +194,7 @@ fun MonacoEditorView(
     onEditorReady: (MonacoEditorController) -> Unit = {},
     onStats: (lines: Int, chars: Int) -> Unit = { _, _ -> },
     onCursor: (line: Int, col: Int) -> Unit = { _, _ -> },
+    onSelectionChanged: (hasSelection: Boolean, selectedText: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
@@ -256,7 +273,8 @@ fun MonacoEditorView(
                             onStatsChanged = onStats,
                             onCursorChanged = onCursor,
                             onReady = { isReady = true },
-                            onError = { msg -> errorMsg = msg }
+                            onError = { msg -> errorMsg = msg },
+                            onSelectionChanged = onSelectionChanged
                         ),
                         "AndroidBridge"
                     )

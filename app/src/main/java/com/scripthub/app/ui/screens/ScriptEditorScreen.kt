@@ -1,5 +1,8 @@
 package com.scripthub.app.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +34,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 
 // ──────────────────────────────────────────────────────────────────
 // 语言枚举 & 检测（Monaco language ID）
@@ -265,10 +273,16 @@ fun ScriptEditorScreen(
     // Monaco 控制器（替代原来的 CodeEditor 引用）
     val controllerRef = remember { mutableStateOf<MonacoEditorController?>(null) }
 
-    var lineCount  by remember { mutableIntStateOf(1) }
-    var charCount  by remember { mutableIntStateOf(0) }
-    var cursorLine by remember { mutableIntStateOf(1) }
-    var cursorCol  by remember { mutableIntStateOf(1) }
+    var lineCount    by remember { mutableIntStateOf(1) }
+    var charCount    by remember { mutableIntStateOf(0) }
+    var cursorLine   by remember { mutableIntStateOf(1) }
+    var cursorCol    by remember { mutableIntStateOf(1) }
+    var hasSelection by remember { mutableStateOf(false) }
+    var selectedText by remember { mutableStateOf("") }
+
+    val clipboard = remember(context) {
+        context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    }
 
     // ── 文件加载（activeFileName/activeEntry 变化时自动重载）───────────
     LaunchedEffect(activeFileName, activeEntry, activeIsFolder) {
@@ -507,6 +521,56 @@ fun ScriptEditorScreen(
                         }
                     }
 
+                    // ── 选区工具栏（有选中文本时滑入）────────────────────
+                    AnimatedVisibility(
+                        visible = hasSelection,
+                        enter   = expandVertically() + fadeIn(),
+                        exit    = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            HorizontalDivider(color = colors.outlineVariant)
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(0.dp),
+                                verticalAlignment     = Alignment.CenterVertically,
+                                modifier              = Modifier
+                                    .fillMaxWidth()
+                                    .background(colors.secondaryContainer.copy(alpha = 0.5f))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                TextButton(
+                                    onClick      = { controllerRef.value?.selectAll() },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) { Text("全选", fontSize = 12.sp) }
+                                TextButton(
+                                    onClick = {
+                                        if (selectedText.isNotEmpty()) {
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
+                                        }
+                                        controllerRef.value?.deleteSelection()
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) { Text("剪切", fontSize = 12.sp) }
+                                TextButton(
+                                    onClick = {
+                                        if (selectedText.isNotEmpty()) {
+                                            clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
+                                            Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) { Text("复制", fontSize = 12.sp) }
+                                TextButton(
+                                    onClick = {
+                                        val text = clipboard.primaryClip
+                                            ?.getItemAt(0)?.text?.toString() ?: ""
+                                        if (text.isNotEmpty()) controllerRef.value?.typeText(text)
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                                ) { Text("粘贴", fontSize = 12.sp) }
+                            }
+                        }
+                    }
+
                     HorizontalDivider(color = colors.outlineVariant)
 
                     // ── 单行：光标 + 全部符号 ─────────────────────────
@@ -555,12 +619,13 @@ fun ScriptEditorScreen(
             }
         } else {
             MonacoEditorView(
-                initialContent = initialContent,
-                language       = lang.monacoId,
-                onEditorReady  = { controller -> controllerRef.value = controller },
-                onStats        = { lines, chars -> lineCount = lines; charCount = chars },
-                onCursor       = { line, col -> cursorLine = line; cursorCol = col },
-                modifier       = Modifier
+                initialContent     = initialContent,
+                language           = lang.monacoId,
+                onEditorReady      = { controller -> controllerRef.value = controller },
+                onStats            = { lines, chars -> lineCount = lines; charCount = chars },
+                onCursor           = { line, col -> cursorLine = line; cursorCol = col },
+                onSelectionChanged = { has, text -> hasSelection = has; selectedText = text },
+                modifier           = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
             )
