@@ -1,1 +1,14 @@
-define("vs/language/typescript/monaco.contribution",["exports","../../monaco.contribution-D2OdxNBt","../../editor.api-CalNCsUg"],(function(e,d,i){"use strict";e.JsxEmit=d.JsxEmit,e.ModuleKind=d.ModuleKind,e.ModuleResolutionKind=d.ModuleResolutionKind,e.NewLineKind=d.NewLineKind,e.ScriptTarget=d.ScriptTarget,e.getJavaScriptWorker=d.getJavaScriptWorker,e.getTypeScriptWorker=d.getTypeScriptWorker,e.javascriptDefaults=d.javascriptDefaults,e.typescriptDefaults=d.typescriptDefaults,e.typescriptVersion=d.typescriptVersion,Object.defineProperty(e,Symbol.toStringTag,{value:"Module"})}));
+define("vs/language/typescript/monaco.contribution", ["exports", "../../monaco.contribution-YfYcxPkX", "../../editor.api-CykLys8L"], (function(exports, language_typescript_monaco_contribution, editor_api) {
+  "use strict";
+  exports.JsxEmit = language_typescript_monaco_contribution.JsxEmit;
+  exports.ModuleKind = language_typescript_monaco_contribution.ModuleKind;
+  exports.ModuleResolutionKind = language_typescript_monaco_contribution.ModuleResolutionKind;
+  exports.NewLineKind = language_typescript_monaco_contribution.NewLineKind;
+  exports.ScriptTarget = language_typescript_monaco_contribution.ScriptTarget;
+  exports.getJavaScriptWorker = language_typescript_monaco_contribution.getJavaScriptWorker;
+  exports.getTypeScriptWorker = language_typescript_monaco_contribution.getTypeScriptWorker;
+  exports.javascriptDefaults = language_typescript_monaco_contribution.javascriptDefaults;
+  exports.typescriptDefaults = language_typescript_monaco_contribution.typescriptDefaults;
+  exports.typescriptVersion = language_typescript_monaco_contribution.typescriptVersion;
+  Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+}));

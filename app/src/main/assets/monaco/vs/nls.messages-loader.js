@@ -1,1 +1,15 @@
-define("vs/nls.messages-loader",["exports"],(function(s){"use strict";function a(o,l,n,t){const e=t["vs/nls"]?.availableLanguages?.["*"];!e||e==="en"?n({}):l([`vs/nls.messages.${e}`],()=>{n({})})}s.load=a,Object.defineProperty(s,Symbol.toStringTag,{value:"Module"})}));
+define("vs/nls.messages-loader", ["exports"], (function(exports) {
+  "use strict";
+  function load(name, req, load2, config) {
+    const requestedLanguage = config["vs/nls"]?.availableLanguages?.["*"];
+    if (!requestedLanguage || requestedLanguage === "en") {
+      load2({});
+    } else {
+      req([`vs/nls.messages.${requestedLanguage}`], () => {
+        load2({});
+      });
+    }
+  }
+  exports.load = load;
+  Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+}));

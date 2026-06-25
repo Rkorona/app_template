@@ -1,5 +1,3305 @@
-define("vs/editor/editor.main",["exports","require","vs/nls.messages-loader!","../monaco.contribution-DO3azKX8","../monaco.contribution-qLAYrEOP","../monaco.contribution-EcChJV6a","../monaco.contribution-D2OdxNBt","../basic-languages/monaco.contribution","../editor.api-CalNCsUg","../workers-DcJshg-q"],(function(D,S,Xn,O,A,N,W,Yn,s,Z){"use strict";function Ne(e){const t=Object.create(null,{[Symbol.toStringTag]:{value:"Module"}});if(e){for(const n in e)if(n!=="default"){const r=Object.getOwnPropertyDescriptor(e,n);Object.defineProperty(t,n,r.get?r:{enumerable:!0,get:()=>e[n]})}}return t.default=e,Object.freeze(t)}const We=Ne(S),ze=""+new URL(S.toUrl("../assets/json.worker-DKiEKt88.js"),document.baseURI).href,qe=""+new URL(S.toUrl("../assets/css.worker-HnVq6Ewq.js"),document.baseURI).href,je=""+new URL(S.toUrl("../assets/html.worker-B51mlPHg.js"),document.baseURI).href,Ue=""+new URL(S.toUrl("../assets/ts.worker-CMbG-7ft.js"),document.baseURI).href,Be=""+new URL(S.toUrl("../assets/editor.worker-Be8ye1pW.js"),document.baseURI).href;function Ve(e){return e.method!==void 0}var K;(function(e){function t(n){return n}e.create=t})(K||(K={}));var w;(function(e){e.parseError=-32700,e.invalidRequest=-32600,e.methodNotFound=-32601,e.invalidParams=-32602,e.internalError=-32603;function t(o){return-32099<=o&&o<=-32e3}e.isServerError=t;function n(o){if(!t(o))throw new Error("Invalid range for a server error.");return o}e.serverError=n,e.unexpectedServerError=-32e3;function r(o){return!0}e.isApplicationError=r;function i(o){return o}e.applicationError=i,e.genericApplicationError=-320100})(w||(w={}));var z=class{listeners=new Set;event=e=>(this.listeners.add(e),{dispose:()=>{this.listeners.delete(e)}});fire(e){this.listeners.forEach(t=>t(e))}},Je=class{_value;eventEmitter;constructor(e){this._value=e,this.eventEmitter=new z}get value(){return this._value}set value(e){this._value!==e&&(this._value=e,this.eventEmitter.fire(e))}get onChange(){return this.eventEmitter.event}};function Ge(e,t){const n=setTimeout(t,e);return{dispose:()=>clearTimeout(n)}}function q(e,t,n){return e instanceof Set?(e.add(t),{dispose:()=>e.delete(t)}):(e.set(t,n),{dispose:()=>e.delete(t)})}var Qe=class{_state="none";promise;resolve=()=>{};reject=()=>{};constructor(){this.promise=new Promise((e,t)=>{this.resolve=e,this.reject=t})}get state(){return this._state}},$=class Me{static id=0;_unprocessedMessages=[];_messageListener;id=Me.id++;_state=new Je({state:"open"});state=this._state;setListener(t){if(this._messageListener=t,!!t)for(;this._unprocessedMessages.length>0&&this._messageListener!==void 0;){const n=this._unprocessedMessages.shift();this._messageListener(n)}}send(t){return this._sendImpl(t)}_dispatchReceivedMessage(t){this._unprocessedMessages.length===0&&this._messageListener?this._messageListener(t):this._unprocessedMessages.push(t)}_onConnectionClosed(){this._state.value={state:"closed",error:void 0}}log(t){return new Xe(this,t??new Ye)}},Xe=class{baseStream;logger;constructor(e,t){this.baseStream=e,this.logger=t}get state(){return this.baseStream.state}setListener(e){if(e===void 0){this.baseStream.setListener(void 0);return}this.baseStream.setListener(t=>{this.logger.log(this.baseStream,"incoming",t),e(t)})}send(e){return this.logger.log(this.baseStream,"outgoing",e),this.baseStream.send(e)}toString(){return`StreamLogger/${this.baseStream.toString()}`}},Ye=class{log(e,t,n){console.log(`${t==="incoming"?"<-":"->"} [${e.toString()}] ${JSON.stringify(n)}`)}},Ze=class Ee{connect;constructor(t){this.connect=t}mapContext(t){return new Ee(n=>this.connect(n?Ke(n,t):void 0))}};function Ke(e,t){return{handleNotification:(n,r)=>e.handleNotification(n,t(r)),handleRequest:(n,r,i)=>e.handleRequest(n,r,t(i))}}var $e=class Fe{_stream;_listener;_logger;static createChannel(t,n){let r=!1;return new Ze(i=>{if(r)throw new Error(`A channel to the stream ${t} was already constructed!`);return r=!0,new Fe(t,i,n)})}_unprocessedResponses=new Map;_lastUsedRequestId=0;constructor(t,n,r){this._stream=t,this._listener=n,this._logger=r,this._stream.setListener(i=>{Ve(i)?i.id===void 0?this._processNotification(i):this._processRequest(i):this._processResponse(i)})}get state(){return this._stream.state}async _processNotification(t){if(t.id!==void 0)throw new Error;if(!this._listener){this._logger&&this._logger.debug({text:"Notification ignored",message:t});return}try{await this._listener.handleNotification({method:t.method,params:t.params||null})}catch(n){this._logger&&this._logger.warn({text:`Exception was thrown while handling notification: ${n}`,exception:n,message:t})}}async _processRequest(t){if(t.id===void 0)throw new Error;let n;if(this._listener)try{n=await this._listener.handleRequest({method:t.method,params:t.params||null},t.id)}catch(i){this._logger&&this._logger.warn({text:`Exception was thrown while handling request: ${i}`,message:t,exception:i}),n={error:{code:w.internalError,message:"An unexpected exception was thrown.",data:void 0}}}else this._logger&&this._logger.debug({text:"Received request even though not listening for requests",message:t}),n={error:{code:w.methodNotFound,message:"This endpoint does not listen for requests or notifications.",data:void 0}};let r;"result"in n?r={jsonrpc:"2.0",id:t.id,result:n.result}:r={jsonrpc:"2.0",id:t.id,error:n.error},await this._stream.send(r)}_processResponse(t){const n=""+t.id,r=this._unprocessedResponses.get(n);if(!r){this._logger&&this._logger.debug({text:"Got an unexpected response message",message:t});return}this._unprocessedResponses.delete(n),r(t)}_newRequestId(){return this._lastUsedRequestId++}sendRequest(t,n,r){const i={jsonrpc:"2.0",id:this._newRequestId(),method:t.method,params:t.params||void 0};return r&&r(i.id),new Promise((o,a)=>{const l=""+i.id;this._unprocessedResponses.set(l,g=>{"result"in g?o({result:g.result}):(g.error||a(new Error("Response had neither 'result' nor 'error' field set.")),o({error:g.error}))}),this._stream.send(i).then(void 0,g=>{this._unprocessedResponses.delete(l),a(g)})})}sendNotification(t,n){const r={jsonrpc:"2.0",id:void 0,method:t.method,params:t.params||void 0};return this._stream.send(r)}toString(){return"StreamChannel/"+this._stream.toString()}},C;(function(e){function t(){return{deserializeFromJson:i=>({hasErrors:!1,value:i}),serializeToJson:i=>i}}e.sAny=t;function n(){return{deserializeFromJson:i=>({hasErrors:!1,value:{}}),serializeToJson:i=>({})}}e.sEmptyObject=n;function r(){return{deserializeFromJson:i=>({hasErrors:!1,value:void 0}),serializeToJson:i=>null}}e.sVoidFromNull=r})(C||(C={}));const ee=Symbol("OptionalMethodNotFound");var te=class{contextualize(e){return new et(this,e)}},et=class extends te{underylingTypedChannel;converters;constructor(e,t){super(),this.underylingTypedChannel=e,this.converters=t}async request(e,t,n){const r=await this.converters.getSendContext(n);return this.underylingTypedChannel.request(e,t,r)}async notify(e,t,n){const r=await this.converters.getSendContext(n);return this.underylingTypedChannel.notify(e,t,r)}registerNotificationHandler(e,t){return this.underylingTypedChannel.registerNotificationHandler(e,async(n,r)=>await t(n,await this.converters.getNewContext(r)))}registerRequestHandler(e,t){return this.underylingTypedChannel.registerRequestHandler(e,async(n,r,i)=>await t(n,r,await this.converters.getNewContext(i)))}},j=class Pe extends te{channelCtor;static fromTransport(t,n={}){return new Pe($e.createChannel(t,n.logger),n)}_requestSender=void 0;_handler=new Map;_unknownNotificationHandler=new Set;_timeout;sendExceptionDetails=!1;_logger;constructor(t,n={}){super(),this.channelCtor=t,this._logger=n.logger,this.sendExceptionDetails=!!n.sendExceptionDetails,this._timeout=Ge(1e3,()=>{this._requestSender||console.warn(`"${this.startListen.name}" has not been called within 1 second after construction of this channel. Did you forget to call it?`,this)})}listeningDeferred=new Qe;onListening=this.listeningDeferred.promise;_requestDidErrorEventEmitter=new z;onRequestDidError=this._requestDidErrorEventEmitter.event;startListen(){if(this._requestSender)throw new Error(`"${this.startListen.name}" can be called only once, but it already has been called.`);this._timeout&&(this._timeout.dispose(),this._timeout=void 0),this._requestSender=this.channelCtor.connect({handleRequest:(t,n,r)=>this.handleRequest(t,n,r),handleNotification:(t,n)=>this.handleNotification(t,n)}),this.listeningDeferred.resolve()}checkChannel(t){if(!t)throw new Error(`"${this.startListen.name}" must be called before any messages can be sent or received.`);return!0}async handleRequest(t,n,r){const i=this._handler.get(t.method);if(!i)return this._logger&&this._logger.debug({text:`No request handler for "${t.method}".`,data:{requestObject:t}}),{error:{code:w.methodNotFound,message:`No request handler for "${t.method}".`,data:{method:t.method}}};if(i.kind!="request"){const a=`"${t.method}" is registered as notification, but was sent as request.`;return this._logger&&this._logger.debug({text:a,data:{requestObject:t}}),{error:{code:w.invalidRequest,message:a,data:{method:t.method}}}}const o=i.requestType.paramsSerializer.deserializeFromJson(t.params);if(o.hasErrors){const a=`Got invalid params: ${o.errorMessage}`;return this._logger&&this._logger.debug({text:a,data:{requestObject:t,errorMessage:o.errorMessage}}),{error:{code:w.invalidParams,message:a,data:{errors:o.errorMessage}}}}else{const a=o.value;let l;try{const g=await i.handler(a,n,r);if("error"in g||"errorMessage"in g){const y=g.error?i.requestType.errorSerializer.serializeToJson(g.error):void 0;l={error:{code:g.errorCode||w.genericApplicationError,message:g.errorMessage||"An error was returned",data:y}}}else l={result:i.requestType.resultSerializer.serializeToJson(g.ok)}}catch(g){g instanceof re?l={error:{code:g.code,message:g.message}}:(this._logger&&this._logger.warn({text:`An exception was thrown while handling a request: ${g}.`,exception:g,data:{requestObject:t}}),l={error:{code:w.unexpectedServerError,message:this.sendExceptionDetails?`An exception was thrown while handling a request: ${g}.`:"Server has thrown an unexpected exception"}})}return l}}async handleNotification(t,n){const r=this._handler.get(t.method);if(!r){for(const a of this._unknownNotificationHandler)a(t);this._unknownNotificationHandler.size===0&&this._logger&&this._logger.debug({text:`Unhandled notification "${t.method}"`,data:{requestObject:t}});return}if(r.kind!="notification"){this._logger&&this._logger.debug({text:`"${t.method}" is registered as request, but was sent as notification.`,data:{requestObject:t}});return}const i=r.notificationType.paramsSerializer.deserializeFromJson(t.params);if(i.hasErrors){this._logger&&this._logger.debug({text:`Got invalid params: ${i}`,data:{requestObject:t,errorMessage:i.errorMessage}});return}const o=i.value;for(const a of r.handlers)try{a(o,n)}catch(l){this._logger&&this._logger.warn({text:`An exception was thrown while handling a notification: ${l}.`,exception:l,data:{requestObject:t}})}}registerUnknownNotificationHandler(t){return q(this._unknownNotificationHandler,t)}registerRequestHandler(t,n){if(this._handler.get(t.method))throw new Error(`Handler with method "${t.method}" already registered.`);return q(this._handler,t.method,{kind:"request",requestType:t,handler:n})}registerNotificationHandler(t,n){let r=this._handler.get(t.method);if(!r)r={kind:"notification",notificationType:t,handlers:new Set},this._handler.set(t.method,r);else{if(r.kind!=="notification")throw new Error(`Method "${t.method}" was already registered as request handler.`);if(r.notificationType!==t)throw new Error(`Method "${t.method}" was registered for a different type.`)}return q(r.handlers,n)}getRegisteredTypes(){const t=[];for(const n of this._handler.values())n.kind==="notification"?t.push(n.notificationType):n.kind==="request"&&t.push(n.requestType);return t}async request(t,n,r){if(!this.checkChannel(this._requestSender))throw new Error("Impossible");const i=t.paramsSerializer.serializeToJson(n);ne(i);const o=await this._requestSender.sendRequest({method:t.method,params:i},r);if("error"in o){if(t.isOptional&&o.error.code===w.methodNotFound)return ee;let a;if(o.error.data!==void 0){const g=t.errorSerializer.deserializeFromJson(o.error.data);if(g.hasErrors)throw new Error(g.errorMessage);a=g.value}else a=void 0;const l=new re(o.error.message,a,o.error.code);throw this._requestDidErrorEventEmitter.fire({error:l}),l}else{const a=t.resultSerializer.deserializeFromJson(o.result);if(a.hasErrors)throw new Error("Could not deserialize response: "+a.errorMessage+`
+define("vs/editor/editor.main", ["exports", "require", "vs/nls.messages-loader!", "../monaco.contribution-D_SyqKiy", "../monaco.contribution-D74vF5SR", "../monaco.contribution-Cqdn_4Kw", "../monaco.contribution-YfYcxPkX", "../basic-languages/monaco.contribution", "../editor.api-CykLys8L", "../workers-p6mTW5Va"], (function(exports, require, nls_messagesLoader_, language_css_monaco_contribution, language_html_monaco_contribution, language_json_monaco_contribution, language_typescript_monaco_contribution, basicLanguages_monaco_contribution, editor_api, workers) {
+  "use strict";
+  function _interopNamespaceDefault(e) {
+    const n = Object.create(null, { [Symbol.toStringTag]: { value: "Module" } });
+    if (e) {
+      for (const k in e) {
+        if (k !== "default") {
+          const d = Object.getOwnPropertyDescriptor(e, k);
+          Object.defineProperty(n, k, d.get ? d : {
+            enumerable: true,
+            get: () => e[k]
+          });
+        }
+      }
+    }
+    n.default = e;
+    return Object.freeze(n);
+  }
+  const require__namespace = /* @__PURE__ */ _interopNamespaceDefault(require);
+  const __worker_url_0__ = "" + new URL(require.toUrl("../assets/json.worker-CvNsV1ln.js"), document.baseURI).href;
+  const __worker_url_1__ = "" + new URL(require.toUrl("../assets/css.worker-CgWp-mpq.js"), document.baseURI).href;
+  const __worker_url_2__ = "" + new URL(require.toUrl("../assets/html.worker-Dp8eKPfv.js"), document.baseURI).href;
+  const __worker_url_3__ = "" + new URL(require.toUrl("../assets/ts.worker-ClNbeHrN.js"), document.baseURI).href;
+  const __worker_url_4__ = "" + new URL(require.toUrl("../assets/editor.worker-DbHNojjm.js"), document.baseURI).href;
+  function isRequestOrNotification(msg) {
+    return msg.method !== void 0;
+  }
+  var ErrorObject;
+  (function(ErrorObject$1) {
+    function create(obj) {
+      return obj;
+    }
+    ErrorObject$1.create = create;
+  })(ErrorObject || (ErrorObject = {}));
+  var ErrorCode;
+  (function(ErrorCode$1) {
+    ErrorCode$1.parseError = -32700;
+    ErrorCode$1.invalidRequest = -32600;
+    ErrorCode$1.methodNotFound = -32601;
+    ErrorCode$1.invalidParams = -32602;
+    ErrorCode$1.internalError = -32603;
+    function isServerError(code) {
+      return -32099 <= code && code <= -32e3;
+    }
+    ErrorCode$1.isServerError = isServerError;
+    function serverError(code) {
+      if (!isServerError(code)) throw new Error("Invalid range for a server error.");
+      return code;
+    }
+    ErrorCode$1.serverError = serverError;
+    ErrorCode$1.unexpectedServerError = -32e3;
+    function isApplicationError(code) {
+      return true;
+    }
+    ErrorCode$1.isApplicationError = isApplicationError;
+    function applicationError(code) {
+      return code;
+    }
+    ErrorCode$1.applicationError = applicationError;
+    ErrorCode$1.genericApplicationError = -320100;
+  })(ErrorCode || (ErrorCode = {}));
+  var EventEmitter = class {
+    listeners = /* @__PURE__ */ new Set();
+    event = (listener) => {
+      this.listeners.add(listener);
+      return { dispose: () => {
+        this.listeners.delete(listener);
+      } };
+    };
+    fire(args) {
+      this.listeners.forEach((listener) => listener(args));
+    }
+  };
+  var ValueWithChangeEvent = class {
+    _value;
+    eventEmitter;
+    constructor(initialValue) {
+      this._value = initialValue;
+      this.eventEmitter = new EventEmitter();
+    }
+    get value() {
+      return this._value;
+    }
+    set value(newValue) {
+      if (this._value !== newValue) {
+        this._value = newValue;
+        this.eventEmitter.fire(newValue);
+      }
+    }
+    get onChange() {
+      return this.eventEmitter.event;
+    }
+  };
+  function createTimeout(delay, callback) {
+    const handle = setTimeout(callback, delay);
+    return { dispose: () => clearTimeout(handle) };
+  }
+  function setAndDeleteOnDispose(set, keyOrItem, item) {
+    if (set instanceof Set) {
+      set.add(keyOrItem);
+      return { dispose: () => set.delete(keyOrItem) };
+    } else {
+      set.set(keyOrItem, item);
+      return { dispose: () => set.delete(keyOrItem) };
+    }
+  }
+  var Deferred = class {
+    _state = "none";
+    promise;
+    resolve = () => {
+    };
+    reject = () => {
+    };
+    constructor() {
+      this.promise = new Promise((resolve, reject) => {
+        this.resolve = resolve;
+        this.reject = reject;
+      });
+    }
+    get state() {
+      return this._state;
+    }
+  };
+  var BaseMessageTransport = class BaseMessageTransport2 {
+    static id = 0;
+    _unprocessedMessages = [];
+    _messageListener;
+    id = BaseMessageTransport2.id++;
+    _state = new ValueWithChangeEvent({ state: "open" });
+    state = this._state;
+    /**
+    * Sets a callback for incoming messages.
+    */
+    setListener(listener) {
+      this._messageListener = listener;
+      if (!listener) return;
+      while (this._unprocessedMessages.length > 0 && this._messageListener !== void 0) {
+        const msg = this._unprocessedMessages.shift();
+        this._messageListener(msg);
+      }
+    }
+    /**
+    * Writes a message to the stream.
+    */
+    send(message) {
+      return this._sendImpl(message);
+    }
+    /**
+    * Call this in derived classes to signal a new message.
+    */
+    _dispatchReceivedMessage(message) {
+      if (this._unprocessedMessages.length === 0 && this._messageListener) this._messageListener(message);
+      else this._unprocessedMessages.push(message);
+    }
+    /**
+    * Call this in derived classes to signal that the connection closed.
+    */
+    _onConnectionClosed() {
+      this._state.value = {
+        state: "closed",
+        error: void 0
+      };
+    }
+    log(logger) {
+      return new StreamLogger(this, logger ?? new ConsoleMessageLogger());
+    }
+  };
+  var StreamLogger = class {
+    baseStream;
+    logger;
+    constructor(baseStream, logger) {
+      this.baseStream = baseStream;
+      this.logger = logger;
+    }
+    get state() {
+      return this.baseStream.state;
+    }
+    setListener(listener) {
+      if (listener === void 0) {
+        this.baseStream.setListener(void 0);
+        return;
+      }
+      this.baseStream.setListener((readMessage) => {
+        this.logger.log(this.baseStream, "incoming", readMessage);
+        listener(readMessage);
+      });
+    }
+    send(message) {
+      this.logger.log(this.baseStream, "outgoing", message);
+      return this.baseStream.send(message);
+    }
+    toString() {
+      return `StreamLogger/${this.baseStream.toString()}`;
+    }
+  };
+  var ConsoleMessageLogger = class {
+    log(stream, type, message) {
+      const char = type === "incoming" ? "<-" : "->";
+      console.log(`${char} [${stream.toString()}] ${JSON.stringify(message)}`);
+    }
+  };
+  var Channel = class Channel2 {
+    connect;
+    constructor(connect) {
+      this.connect = connect;
+    }
+    mapContext(map) {
+      return new Channel2((listener) => this.connect(listener ? mapRequestHandlerContext(listener, map) : void 0));
+    }
+  };
+  function mapRequestHandlerContext(messageHandler, map) {
+    return {
+      handleNotification: (request, context) => messageHandler.handleNotification(request, map(context)),
+      handleRequest: (request, requestId, context) => messageHandler.handleRequest(request, requestId, map(context))
+    };
+  }
+  var StreamBasedChannel = class StreamBasedChannel2 {
+    _stream;
+    _listener;
+    _logger;
+    /**
+    * Creates a channel factory from a given stream and logger.
+    * This allows to delay specifying a `RequestHandler`.
+    * Once the channel is created, it processes incoming messages.
+    */
+    static createChannel(stream, logger) {
+      let constructed = false;
+      return new Channel((listener) => {
+        if (constructed) throw new Error(`A channel to the stream ${stream} was already constructed!`);
+        else constructed = true;
+        return new StreamBasedChannel2(stream, listener, logger);
+      });
+    }
+    _unprocessedResponses = /* @__PURE__ */ new Map();
+    _lastUsedRequestId = 0;
+    constructor(_stream, _listener, _logger) {
+      this._stream = _stream;
+      this._listener = _listener;
+      this._logger = _logger;
+      this._stream.setListener((message) => {
+        if (isRequestOrNotification(message)) if (message.id === void 0) this._processNotification(message);
+        else this._processRequest(message);
+        else this._processResponse(message);
+      });
+    }
+    get state() {
+      return this._stream.state;
+    }
+    async _processNotification(message) {
+      if (message.id !== void 0) throw new Error();
+      if (!this._listener) {
+        if (this._logger) this._logger.debug({
+          text: "Notification ignored",
+          message
+        });
+        return;
+      }
+      try {
+        await this._listener.handleNotification({
+          method: message.method,
+          params: message.params || null
+        });
+      } catch (exception) {
+        if (this._logger) this._logger.warn({
+          text: `Exception was thrown while handling notification: ${exception}`,
+          exception,
+          message
+        });
+      }
+    }
+    async _processRequest(message) {
+      if (message.id === void 0) throw new Error();
+      let result;
+      if (this._listener) try {
+        result = await this._listener.handleRequest({
+          method: message.method,
+          params: message.params || null
+        }, message.id);
+      } catch (exception) {
+        if (this._logger) this._logger.warn({
+          text: `Exception was thrown while handling request: ${exception}`,
+          message,
+          exception
+        });
+        result = { error: {
+          code: ErrorCode.internalError,
+          message: "An unexpected exception was thrown.",
+          data: void 0
+        } };
+      }
+      else {
+        if (this._logger) this._logger.debug({
+          text: "Received request even though not listening for requests",
+          message
+        });
+        result = { error: {
+          code: ErrorCode.methodNotFound,
+          message: "This endpoint does not listen for requests or notifications.",
+          data: void 0
+        } };
+      }
+      let responseMsg;
+      if ("result" in result) responseMsg = {
+        jsonrpc: "2.0",
+        id: message.id,
+        result: result.result
+      };
+      else responseMsg = {
+        jsonrpc: "2.0",
+        id: message.id,
+        error: result.error
+      };
+      await this._stream.send(responseMsg);
+    }
+    _processResponse(message) {
+      const strId = "" + message.id;
+      const callback = this._unprocessedResponses.get(strId);
+      if (!callback) {
+        if (this._logger) this._logger.debug({
+          text: "Got an unexpected response message",
+          message
+        });
+        return;
+      }
+      this._unprocessedResponses.delete(strId);
+      callback(message);
+    }
+    _newRequestId() {
+      return this._lastUsedRequestId++;
+    }
+    sendRequest(request, _context, messageIdCallback) {
+      const message = {
+        jsonrpc: "2.0",
+        id: this._newRequestId(),
+        method: request.method,
+        params: request.params || void 0
+      };
+      if (messageIdCallback) messageIdCallback(message.id);
+      return new Promise((resolve, reject) => {
+        const strId = "" + message.id;
+        this._unprocessedResponses.set(strId, (response) => {
+          if ("result" in response) resolve({ result: response.result });
+          else {
+            if (!response.error) reject(/* @__PURE__ */ new Error("Response had neither 'result' nor 'error' field set."));
+            resolve({ error: response.error });
+          }
+        });
+        this._stream.send(message).then(void 0, (reason) => {
+          this._unprocessedResponses.delete(strId);
+          reject(reason);
+        });
+      });
+    }
+    sendNotification(notification, context) {
+      const msg = {
+        jsonrpc: "2.0",
+        id: void 0,
+        method: notification.method,
+        params: notification.params || void 0
+      };
+      return this._stream.send(msg);
+    }
+    toString() {
+      return "StreamChannel/" + this._stream.toString();
+    }
+  };
+  var Serializers;
+  (function(Serializers$1) {
+    function sAny() {
+      return {
+        deserializeFromJson: (input) => ({
+          hasErrors: false,
+          value: input
+        }),
+        serializeToJson: (input) => input
+      };
+    }
+    Serializers$1.sAny = sAny;
+    function sEmptyObject() {
+      return {
+        deserializeFromJson: (input) => ({
+          hasErrors: false,
+          value: {}
+        }),
+        serializeToJson: (input) => ({})
+      };
+    }
+    Serializers$1.sEmptyObject = sEmptyObject;
+    function sVoidFromNull() {
+      return {
+        deserializeFromJson: (input) => ({
+          hasErrors: false,
+          value: void 0
+        }),
+        serializeToJson: (input) => null
+      };
+    }
+    Serializers$1.sVoidFromNull = sVoidFromNull;
+  })(Serializers || (Serializers = {}));
+  const OptionalMethodNotFound = Symbol("OptionalMethodNotFound");
+  var TypedChannelBase = class {
+    contextualize(args) {
+      return new ContextualizedTypedChannel(this, args);
+    }
+  };
+  var ContextualizedTypedChannel = class extends TypedChannelBase {
+    underylingTypedChannel;
+    converters;
+    constructor(underylingTypedChannel, converters) {
+      super();
+      this.underylingTypedChannel = underylingTypedChannel;
+      this.converters = converters;
+    }
+    async request(requestType, args, newContext) {
+      const context = await this.converters.getSendContext(newContext);
+      return this.underylingTypedChannel.request(requestType, args, context);
+    }
+    async notify(notificationType, params, newContext) {
+      const context = await this.converters.getSendContext(newContext);
+      return this.underylingTypedChannel.notify(notificationType, params, context);
+    }
+    registerNotificationHandler(type, handler) {
+      return this.underylingTypedChannel.registerNotificationHandler(type, async (arg, context) => {
+        return await handler(arg, await this.converters.getNewContext(context));
+      });
+    }
+    registerRequestHandler(requestType, handler) {
+      return this.underylingTypedChannel.registerRequestHandler(requestType, async (arg, requestId, context) => {
+        return await handler(arg, requestId, await this.converters.getNewContext(context));
+      });
+    }
+  };
+  var TypedChannel = class TypedChannel2 extends TypedChannelBase {
+    channelCtor;
+    static fromTransport(stream, options = {}) {
+      return new TypedChannel2(StreamBasedChannel.createChannel(stream, options.logger), options);
+    }
+    _requestSender = void 0;
+    _handler = /* @__PURE__ */ new Map();
+    _unknownNotificationHandler = /* @__PURE__ */ new Set();
+    _timeout;
+    sendExceptionDetails = false;
+    _logger;
+    constructor(channelCtor, options = {}) {
+      super();
+      this.channelCtor = channelCtor;
+      this._logger = options.logger;
+      this.sendExceptionDetails = !!options.sendExceptionDetails;
+      this._timeout = createTimeout(1e3, () => {
+        if (!this._requestSender) console.warn(`"${this.startListen.name}" has not been called within 1 second after construction of this channel. Did you forget to call it?`, this);
+      });
+    }
+    listeningDeferred = new Deferred();
+    onListening = this.listeningDeferred.promise;
+    _requestDidErrorEventEmitter = new EventEmitter();
+    onRequestDidError = this._requestDidErrorEventEmitter.event;
+    /**
+    * This method must be called to forward messages from the stream to this channel.
+    * This is not done automatically on construction so that this instance
+    * can be setup properly before handling messages.
+    */
+    startListen() {
+      if (this._requestSender) throw new Error(`"${this.startListen.name}" can be called only once, but it already has been called.`);
+      if (this._timeout) {
+        this._timeout.dispose();
+        this._timeout = void 0;
+      }
+      this._requestSender = this.channelCtor.connect({
+        handleRequest: (req, id, context) => this.handleRequest(req, id, context),
+        handleNotification: (req, context) => this.handleNotification(req, context)
+      });
+      this.listeningDeferred.resolve();
+    }
+    checkChannel(channel) {
+      if (!channel) throw new Error(`"${this.startListen.name}" must be called before any messages can be sent or received.`);
+      return true;
+    }
+    async handleRequest(request, requestId, context) {
+      const handler = this._handler.get(request.method);
+      if (!handler) {
+        if (this._logger) this._logger.debug({
+          text: `No request handler for "${request.method}".`,
+          data: { requestObject: request }
+        });
+        return { error: {
+          code: ErrorCode.methodNotFound,
+          message: `No request handler for "${request.method}".`,
+          data: { method: request.method }
+        } };
+      }
+      if (handler.kind != "request") {
+        const message = `"${request.method}" is registered as notification, but was sent as request.`;
+        if (this._logger) this._logger.debug({
+          text: message,
+          data: { requestObject: request }
+        });
+        return { error: {
+          code: ErrorCode.invalidRequest,
+          message,
+          data: { method: request.method }
+        } };
+      }
+      const decodeResult = handler.requestType.paramsSerializer.deserializeFromJson(request.params);
+      if (decodeResult.hasErrors) {
+        const message = `Got invalid params: ${decodeResult.errorMessage}`;
+        if (this._logger) this._logger.debug({
+          text: message,
+          data: {
+            requestObject: request,
+            errorMessage: decodeResult.errorMessage
+          }
+        });
+        return { error: {
+          code: ErrorCode.invalidParams,
+          message,
+          data: { errors: decodeResult.errorMessage }
+        } };
+      } else {
+        const args = decodeResult.value;
+        let response;
+        try {
+          const result = await handler.handler(args, requestId, context);
+          if ("error" in result || "errorMessage" in result) {
+            const errorData = result.error ? handler.requestType.errorSerializer.serializeToJson(result.error) : void 0;
+            response = { error: {
+              code: result.errorCode || ErrorCode.genericApplicationError,
+              message: result.errorMessage || "An error was returned",
+              data: errorData
+            } };
+          } else response = { result: handler.requestType.resultSerializer.serializeToJson(result.ok) };
+        } catch (exception) {
+          if (exception instanceof RequestHandlingError) response = { error: {
+            code: exception.code,
+            message: exception.message
+          } };
+          else {
+            if (this._logger) this._logger.warn({
+              text: `An exception was thrown while handling a request: ${exception}.`,
+              exception,
+              data: { requestObject: request }
+            });
+            response = { error: {
+              code: ErrorCode.unexpectedServerError,
+              message: this.sendExceptionDetails ? `An exception was thrown while handling a request: ${exception}.` : "Server has thrown an unexpected exception"
+            } };
+          }
+        }
+        return response;
+      }
+    }
+    async handleNotification(request, context) {
+      const handler = this._handler.get(request.method);
+      if (!handler) {
+        for (const h of this._unknownNotificationHandler) h(request);
+        if (this._unknownNotificationHandler.size === 0) {
+          if (this._logger) this._logger.debug({
+            text: `Unhandled notification "${request.method}"`,
+            data: { requestObject: request }
+          });
+        }
+        return;
+      }
+      if (handler.kind != "notification") {
+        if (this._logger) this._logger.debug({
+          text: `"${request.method}" is registered as request, but was sent as notification.`,
+          data: { requestObject: request }
+        });
+        return;
+      }
+      const decodeResult = handler.notificationType.paramsSerializer.deserializeFromJson(request.params);
+      if (decodeResult.hasErrors) {
+        if (this._logger) this._logger.debug({
+          text: `Got invalid params: ${decodeResult}`,
+          data: {
+            requestObject: request,
+            errorMessage: decodeResult.errorMessage
+          }
+        });
+        return;
+      }
+      const val = decodeResult.value;
+      for (const handlerFunc of handler.handlers) try {
+        handlerFunc(val, context);
+      } catch (exception) {
+        if (this._logger) this._logger.warn({
+          text: `An exception was thrown while handling a notification: ${exception}.`,
+          exception,
+          data: { requestObject: request }
+        });
+      }
+    }
+    registerUnknownNotificationHandler(handler) {
+      return setAndDeleteOnDispose(this._unknownNotificationHandler, handler);
+    }
+    registerRequestHandler(requestType, handler) {
+      if (this._handler.get(requestType.method)) throw new Error(`Handler with method "${requestType.method}" already registered.`);
+      return setAndDeleteOnDispose(this._handler, requestType.method, {
+        kind: "request",
+        requestType,
+        handler
+      });
+    }
+    registerNotificationHandler(type, handler) {
+      let registeredHandler = this._handler.get(type.method);
+      if (!registeredHandler) {
+        registeredHandler = {
+          kind: "notification",
+          notificationType: type,
+          handlers: /* @__PURE__ */ new Set()
+        };
+        this._handler.set(type.method, registeredHandler);
+      } else {
+        if (registeredHandler.kind !== "notification") throw new Error(`Method "${type.method}" was already registered as request handler.`);
+        if (registeredHandler.notificationType !== type) throw new Error(`Method "${type.method}" was registered for a different type.`);
+      }
+      return setAndDeleteOnDispose(registeredHandler.handlers, handler);
+    }
+    getRegisteredTypes() {
+      const result = [];
+      for (const h of this._handler.values()) if (h.kind === "notification") result.push(h.notificationType);
+      else if (h.kind === "request") result.push(h.requestType);
+      return result;
+    }
+    async request(requestType, args, context) {
+      if (!this.checkChannel(this._requestSender)) throw new Error("Impossible");
+      const params = requestType.paramsSerializer.serializeToJson(args);
+      assertObjectArrayOrNull(params);
+      const response = await this._requestSender.sendRequest({
+        method: requestType.method,
+        params
+      }, context);
+      if ("error" in response) {
+        if (requestType.isOptional && response.error.code === ErrorCode.methodNotFound) return OptionalMethodNotFound;
+        let errorData;
+        if (response.error.data !== void 0) {
+          const deserializationResult = requestType.errorSerializer.deserializeFromJson(response.error.data);
+          if (deserializationResult.hasErrors) throw new Error(deserializationResult.errorMessage);
+          errorData = deserializationResult.value;
+        } else errorData = void 0;
+        const error = new RequestHandlingError(response.error.message, errorData, response.error.code);
+        this._requestDidErrorEventEmitter.fire({ error });
+        throw error;
+      } else {
+        const result = requestType.resultSerializer.deserializeFromJson(response.result);
+        if (result.hasErrors) throw new Error("Could not deserialize response: " + result.errorMessage + `
 
-${JSON.stringify(o,null,2)}`);return a.value}}async notify(t,n,r){if(!this.checkChannel(this._requestSender))throw new Error;const i=t.paramsSerializer.serializeToJson(n);ne(i),this._requestSender.sendNotification({method:t.method,params:i},r)}};function ne(e){if(e!==null&&Array.isArray(e)&&typeof e!="object")throw new Error("Invalid value! Only null, array and object is allowed.")}var re=class Le extends Error{data;code;constructor(t,n,r=w.genericApplicationError){super(t),this.data=n,this.code=r,Object.setPrototypeOf(this,Le.prototype)}},tt=class X{method;paramsSerializer;resultSerializer;errorSerializer;isOptional;kind="request";constructor(t,n,r,i,o=!1){this.method=t,this.paramsSerializer=n,this.resultSerializer=r,this.errorSerializer=i,this.isOptional=o}withMethod(t){return new X(t,this.paramsSerializer,this.resultSerializer,this.errorSerializer)}optional(){return new X(this.method,this.paramsSerializer,this.resultSerializer,this.errorSerializer,!0)}},nt=class He{method;paramsSerializer;kind="notification";constructor(t,n){this.method=t,this.paramsSerializer=n}withMethod(t){return new He(t,this.paramsSerializer)}};function c(e){return new tt((e||{}).method,C.sAny(),C.sAny(),C.sAny())}function h(e){return new nt((e||{}).method,C.sAny())}const rt=Symbol();var ie=class Ie{error;static factory=t=>new Ie(t);[rt];constructor(t){this.error=t}};function it(e){const t=oe(e.server),n=oe(e.client);return new ot(e.tags||[],t,n)}function oe(e){const t={};for(const[n,r]of Object.entries(e)){const i=r.method?r.method:n;t[n]=r.withMethod(i)}return t}var ot=class Oe{tags;server;client;_onlyDesignTime(){return new Error("This property is not meant to be accessed at runtime")}get TContractObject(){throw this._onlyDesignTime()}get TClientInterface(){throw this._onlyDesignTime()}get TServerInterface(){throw this._onlyDesignTime()}get TClientHandler(){throw this._onlyDesignTime()}get TServerHandler(){throw this._onlyDesignTime()}get TTags(){throw this._onlyDesignTime()}constructor(t=[],n,r){this.tags=t,this.server=n,this.client=r}getInterface(t,n,r,i){const o=this.buildCounterpart(t,r),a=this.registerHandlers(t,n,i,o);return{counterpart:o,dispose:()=>a.dispose()}}buildCounterpart(t,n){const r={};for(const[i,o]of Object.entries(n)){let a;o.kind==="request"?o.isOptional?a=async(l,g)=>{l===void 0&&(l={});try{return await t.request(o,l,g)}catch(y){if(y&&y.code===w.methodNotFound)return ee;throw y}}:a=(l,g)=>(l===void 0&&(l={}),t.request(o,l,g)):a=(l,g)=>(l===void 0&&(l={}),t.notify(o,l,g)),r[i]=a}return r}registerHandlers(t,n,r,i){const o=[];for(const[a,l]of Object.entries(n))if(l.kind==="request"){let g=r[a];if(!g)continue;const y=this.createRequestHandler(i,g);o.push(t.registerRequestHandler(l,y))}else{const g=r[a];g&&o.push(t.registerNotificationHandler(l,(y,Qn)=>{g(y,{context:Qn,counterpart:i})}))}return{dispose:()=>o.forEach(a=>a.dispose())}}createRequestHandler(t,n){return async(r,i,o)=>{const a=await n(r,{context:o,counterpart:t,newErr:ie.factory,requestId:i});return a instanceof ie?a.error:{ok:a}}}static getServerFromStream(t,n,r,i){const o=j.fromTransport(n,r),{server:a}=t.getServer(o,i);return o.startListen(),{channel:o,server:a}}static registerServerToStream(t,n,r,i){const o=j.fromTransport(n,r),{client:a}=t.registerServer(o,i);return o.startListen(),{channel:o,client:a}}getServer(t,n){const{counterpart:r,dispose:i}=this.getInterface(t,this.client,this.server,n);return{server:r,dispose:i}}registerServer(t,n){const{counterpart:r,dispose:i}=this.getInterface(t,this.server,this.client,n);return{client:r,dispose:i}}withContext(){return new Oe(this.tags,this.server,this.client)}};let R=(function(e){return e.Comment="comment",e.Imports="imports",e.Region="region",e})({}),m=(function(e){return e[e.File=1]="File",e[e.Module=2]="Module",e[e.Namespace=3]="Namespace",e[e.Package=4]="Package",e[e.Class=5]="Class",e[e.Method=6]="Method",e[e.Property=7]="Property",e[e.Field=8]="Field",e[e.Constructor=9]="Constructor",e[e.Enum=10]="Enum",e[e.Interface=11]="Interface",e[e.Function=12]="Function",e[e.Variable=13]="Variable",e[e.Constant=14]="Constant",e[e.String=15]="String",e[e.Number=16]="Number",e[e.Boolean=17]="Boolean",e[e.Array=18]="Array",e[e.Object=19]="Object",e[e.Key=20]="Key",e[e.Null=21]="Null",e[e.EnumMember=22]="EnumMember",e[e.Struct=23]="Struct",e[e.Event=24]="Event",e[e.Operator=25]="Operator",e[e.TypeParameter=26]="TypeParameter",e})({}),se=(function(e){return e[e.Deprecated=1]="Deprecated",e})({}),ae=(function(e){return e[e.Type=1]="Type",e[e.Parameter=2]="Parameter",e})({}),st=(function(e){return e[e.None=0]="None",e[e.Full=1]="Full",e[e.Incremental=2]="Incremental",e})({}),f=(function(e){return e[e.Text=1]="Text",e[e.Method=2]="Method",e[e.Function=3]="Function",e[e.Constructor=4]="Constructor",e[e.Field=5]="Field",e[e.Variable=6]="Variable",e[e.Class=7]="Class",e[e.Interface=8]="Interface",e[e.Module=9]="Module",e[e.Property=10]="Property",e[e.Unit=11]="Unit",e[e.Value=12]="Value",e[e.Enum=13]="Enum",e[e.Keyword=14]="Keyword",e[e.Snippet=15]="Snippet",e[e.Color=16]="Color",e[e.File=17]="File",e[e.Reference=18]="Reference",e[e.Folder=19]="Folder",e[e.EnumMember=20]="EnumMember",e[e.Constant=21]="Constant",e[e.Struct=22]="Struct",e[e.Event=23]="Event",e[e.Operator=24]="Operator",e[e.TypeParameter=25]="TypeParameter",e})({}),at=(function(e){return e[e.Deprecated=1]="Deprecated",e})({}),ct=(function(e){return e[e.PlainText=1]="PlainText",e[e.Snippet=2]="Snippet",e})({}),U=(function(e){return e[e.Text=1]="Text",e[e.Read=2]="Read",e[e.Write=3]="Write",e})({}),x=(function(e){return e.Empty="",e.QuickFix="quickfix",e.Refactor="refactor",e.RefactorExtract="refactor.extract",e.RefactorInline="refactor.inline",e.RefactorRewrite="refactor.rewrite",e.Source="source",e.SourceOrganizeImports="source.organizeImports",e.SourceFixAll="source.fixAll",e})({}),P=(function(e){return e.PlainText="plaintext",e.Markdown="markdown",e})({}),_=(function(e){return e[e.Error=1]="Error",e[e.Warning=2]="Warning",e[e.Information=3]="Information",e[e.Hint=4]="Hint",e})({}),ce=(function(e){return e[e.Unnecessary=1]="Unnecessary",e[e.Deprecated=2]="Deprecated",e})({}),L=(function(e){return e[e.Invoked=1]="Invoked",e[e.TriggerCharacter=2]="TriggerCharacter",e[e.TriggerForIncompleteCompletions=3]="TriggerForIncompleteCompletions",e})({}),H=(function(e){return e[e.Invoked=1]="Invoked",e[e.TriggerCharacter=2]="TriggerCharacter",e[e.ContentChange=3]="ContentChange",e})({}),B=(function(e){return e[e.Invoked=1]="Invoked",e[e.Automatic=2]="Automatic",e})({}),lt=(function(e){return e.Relative="relative",e})({});var d=class{constructor(e){this.method=e}};const u={textDocumentImplementation:new d("textDocument/implementation"),textDocumentTypeDefinition:new d("textDocument/typeDefinition"),textDocumentDocumentColor:new d("textDocument/documentColor"),textDocumentColorPresentation:new d("textDocument/colorPresentation"),textDocumentFoldingRange:new d("textDocument/foldingRange"),textDocumentDeclaration:new d("textDocument/declaration"),textDocumentSelectionRange:new d("textDocument/selectionRange"),textDocumentPrepareCallHierarchy:new d("textDocument/prepareCallHierarchy"),textDocumentSemanticTokensFull:new d("textDocument/semanticTokens/full"),textDocumentSemanticTokensFullDelta:new d("textDocument/semanticTokens/full/delta"),textDocumentLinkedEditingRange:new d("textDocument/linkedEditingRange"),workspaceWillCreateFiles:new d("workspace/willCreateFiles"),workspaceWillRenameFiles:new d("workspace/willRenameFiles"),workspaceWillDeleteFiles:new d("workspace/willDeleteFiles"),textDocumentMoniker:new d("textDocument/moniker"),textDocumentPrepareTypeHierarchy:new d("textDocument/prepareTypeHierarchy"),textDocumentInlineValue:new d("textDocument/inlineValue"),textDocumentInlayHint:new d("textDocument/inlayHint"),textDocumentDiagnostic:new d("textDocument/diagnostic"),textDocumentInlineCompletion:new d("textDocument/inlineCompletion"),textDocumentWillSaveWaitUntil:new d("textDocument/willSaveWaitUntil"),textDocumentCompletion:new d("textDocument/completion"),textDocumentHover:new d("textDocument/hover"),textDocumentSignatureHelp:new d("textDocument/signatureHelp"),textDocumentDefinition:new d("textDocument/definition"),textDocumentReferences:new d("textDocument/references"),textDocumentDocumentHighlight:new d("textDocument/documentHighlight"),textDocumentDocumentSymbol:new d("textDocument/documentSymbol"),textDocumentCodeAction:new d("textDocument/codeAction"),workspaceSymbol:new d("workspace/symbol"),textDocumentCodeLens:new d("textDocument/codeLens"),textDocumentDocumentLink:new d("textDocument/documentLink"),textDocumentFormatting:new d("textDocument/formatting"),textDocumentRangeFormatting:new d("textDocument/rangeFormatting"),textDocumentRangesFormatting:new d("textDocument/rangesFormatting"),textDocumentOnTypeFormatting:new d("textDocument/onTypeFormatting"),textDocumentRename:new d("textDocument/rename"),workspaceExecuteCommand:new d("workspace/executeCommand"),workspaceDidCreateFiles:new d("workspace/didCreateFiles"),workspaceDidRenameFiles:new d("workspace/didRenameFiles"),workspaceDidDeleteFiles:new d("workspace/didDeleteFiles"),workspaceDidChangeConfiguration:new d("workspace/didChangeConfiguration"),textDocumentDidOpen:new d("textDocument/didOpen"),textDocumentDidChange:new d("textDocument/didChange"),textDocumentDidClose:new d("textDocument/didClose"),textDocumentDidSave:new d("textDocument/didSave"),textDocumentWillSave:new d("textDocument/willSave"),workspaceDidChangeWatchedFiles:new d("workspace/didChangeWatchedFiles")},E=it({server:{textDocumentImplementation:c({method:"textDocument/implementation"}),textDocumentTypeDefinition:c({method:"textDocument/typeDefinition"}),textDocumentDocumentColor:c({method:"textDocument/documentColor"}),textDocumentColorPresentation:c({method:"textDocument/colorPresentation"}),textDocumentFoldingRange:c({method:"textDocument/foldingRange"}),textDocumentDeclaration:c({method:"textDocument/declaration"}),textDocumentSelectionRange:c({method:"textDocument/selectionRange"}),textDocumentPrepareCallHierarchy:c({method:"textDocument/prepareCallHierarchy"}),callHierarchyIncomingCalls:c({method:"callHierarchy/incomingCalls"}),callHierarchyOutgoingCalls:c({method:"callHierarchy/outgoingCalls"}),textDocumentSemanticTokensFull:c({method:"textDocument/semanticTokens/full"}),textDocumentSemanticTokensFullDelta:c({method:"textDocument/semanticTokens/full/delta"}),textDocumentSemanticTokensRange:c({method:"textDocument/semanticTokens/range"}),textDocumentLinkedEditingRange:c({method:"textDocument/linkedEditingRange"}),workspaceWillCreateFiles:c({method:"workspace/willCreateFiles"}),workspaceWillRenameFiles:c({method:"workspace/willRenameFiles"}),workspaceWillDeleteFiles:c({method:"workspace/willDeleteFiles"}),textDocumentMoniker:c({method:"textDocument/moniker"}),textDocumentPrepareTypeHierarchy:c({method:"textDocument/prepareTypeHierarchy"}),typeHierarchySupertypes:c({method:"typeHierarchy/supertypes"}),typeHierarchySubtypes:c({method:"typeHierarchy/subtypes"}),textDocumentInlineValue:c({method:"textDocument/inlineValue"}),textDocumentInlayHint:c({method:"textDocument/inlayHint"}),inlayHintResolve:c({method:"inlayHint/resolve"}),textDocumentDiagnostic:c({method:"textDocument/diagnostic"}),workspaceDiagnostic:c({method:"workspace/diagnostic"}),textDocumentInlineCompletion:c({method:"textDocument/inlineCompletion"}),initialize:c({method:"initialize"}),shutdown:c({method:"shutdown"}),textDocumentWillSaveWaitUntil:c({method:"textDocument/willSaveWaitUntil"}),textDocumentCompletion:c({method:"textDocument/completion"}),completionItemResolve:c({method:"completionItem/resolve"}),textDocumentHover:c({method:"textDocument/hover"}),textDocumentSignatureHelp:c({method:"textDocument/signatureHelp"}),textDocumentDefinition:c({method:"textDocument/definition"}),textDocumentReferences:c({method:"textDocument/references"}),textDocumentDocumentHighlight:c({method:"textDocument/documentHighlight"}),textDocumentDocumentSymbol:c({method:"textDocument/documentSymbol"}),textDocumentCodeAction:c({method:"textDocument/codeAction"}),codeActionResolve:c({method:"codeAction/resolve"}),workspaceSymbol:c({method:"workspace/symbol"}),workspaceSymbolResolve:c({method:"workspaceSymbol/resolve"}),textDocumentCodeLens:c({method:"textDocument/codeLens"}),codeLensResolve:c({method:"codeLens/resolve"}),textDocumentDocumentLink:c({method:"textDocument/documentLink"}),documentLinkResolve:c({method:"documentLink/resolve"}),textDocumentFormatting:c({method:"textDocument/formatting"}),textDocumentRangeFormatting:c({method:"textDocument/rangeFormatting"}),textDocumentRangesFormatting:c({method:"textDocument/rangesFormatting"}),textDocumentOnTypeFormatting:c({method:"textDocument/onTypeFormatting"}),textDocumentRename:c({method:"textDocument/rename"}),textDocumentPrepareRename:c({method:"textDocument/prepareRename"}),workspaceExecuteCommand:c({method:"workspace/executeCommand"}),workspaceDidChangeWorkspaceFolders:h({method:"workspace/didChangeWorkspaceFolders"}),windowWorkDoneProgressCancel:h({method:"window/workDoneProgress/cancel"}),workspaceDidCreateFiles:h({method:"workspace/didCreateFiles"}),workspaceDidRenameFiles:h({method:"workspace/didRenameFiles"}),workspaceDidDeleteFiles:h({method:"workspace/didDeleteFiles"}),notebookDocumentDidOpen:h({method:"notebookDocument/didOpen"}),notebookDocumentDidChange:h({method:"notebookDocument/didChange"}),notebookDocumentDidSave:h({method:"notebookDocument/didSave"}),notebookDocumentDidClose:h({method:"notebookDocument/didClose"}),initialized:h({method:"initialized"}),exit:h({method:"exit"}),workspaceDidChangeConfiguration:h({method:"workspace/didChangeConfiguration"}),textDocumentDidOpen:h({method:"textDocument/didOpen"}),textDocumentDidChange:h({method:"textDocument/didChange"}),textDocumentDidClose:h({method:"textDocument/didClose"}),textDocumentDidSave:h({method:"textDocument/didSave"}),textDocumentWillSave:h({method:"textDocument/willSave"}),workspaceDidChangeWatchedFiles:h({method:"workspace/didChangeWatchedFiles"}),setTrace:h({method:"$/setTrace"}),cancelRequest:h({method:"$/cancelRequest"}),progress:h({method:"$/progress"})},client:{workspaceWorkspaceFolders:c({method:"workspace/workspaceFolders"}).optional(),workspaceConfiguration:c({method:"workspace/configuration"}).optional(),workspaceFoldingRangeRefresh:c({method:"workspace/foldingRange/refresh"}).optional(),windowWorkDoneProgressCreate:c({method:"window/workDoneProgress/create"}).optional(),workspaceSemanticTokensRefresh:c({method:"workspace/semanticTokens/refresh"}).optional(),windowShowDocument:c({method:"window/showDocument"}).optional(),workspaceInlineValueRefresh:c({method:"workspace/inlineValue/refresh"}).optional(),workspaceInlayHintRefresh:c({method:"workspace/inlayHint/refresh"}).optional(),workspaceDiagnosticRefresh:c({method:"workspace/diagnostic/refresh"}).optional(),clientRegisterCapability:c({method:"client/registerCapability"}).optional(),clientUnregisterCapability:c({method:"client/unregisterCapability"}).optional(),windowShowMessageRequest:c({method:"window/showMessageRequest"}).optional(),workspaceCodeLensRefresh:c({method:"workspace/codeLens/refresh"}).optional(),workspaceApplyEdit:c({method:"workspace/applyEdit"}).optional(),windowShowMessage:h({method:"window/showMessage"}),windowLogMessage:h({method:"window/logMessage"}),telemetryEvent:h({method:"telemetry/event"}),textDocumentPublishDiagnostics:h({method:"textDocument/publishDiagnostics"}),logTrace:h({method:"$/logTrace"}),cancelRequest:h({method:"$/cancelRequest"}),progress:h({method:"$/progress"})}});function k(e,t){if(e.textModel!==t)throw new Error(`Expected text model to be ${t}, but got ${e.textModel}`);return e}var p=class{static None=Object.freeze({dispose(){}});_store=new V;constructor(){}dispose(){this._store.dispose()}_register(e){if(e===this)throw new Error("Cannot register a disposable on itself!");return this._store.add(e)}},V=class{static DISABLE_DISPOSED_WARNING=!1;_toDispose=new Set;_isDisposed=!1;dispose(){this._isDisposed||(this._isDisposed=!0,this.clear())}clear(){if(this._toDispose.size!==0)try{for(const t of this._toDispose)t.dispose()}finally{this._toDispose.clear()}}add(t){if(!t)return t;if(t===this)throw new Error("Cannot register a disposable on itself!");return this._isDisposed?console.warn(new Error("Trying to add a disposable to a DisposableStore that has already been disposed of. The added object will be leaked!").stack):this._toDispose.add(t),t}};const le=new Map([[x.Empty,""],[x.QuickFix,"quickfix"],[x.Refactor,"refactor"],[x.RefactorExtract,"refactor.extract"],[x.RefactorInline,"refactor.inline"],[x.RefactorRewrite,"refactor.rewrite"],[x.Source,"source"],[x.SourceOrganizeImports,"source.organizeImports"],[x.SourceFixAll,"source.fixAll"]]);function ut(e){if(e)return le.get(e)??e}const dt=new Map([[s.languages.CodeActionTriggerType.Invoke,B.Invoked],[s.languages.CodeActionTriggerType.Auto,B.Automatic]]);function gt(e){return dt.get(e)??B.Invoked}const ue=new Map([[f.Text,s.languages.CompletionItemKind.Text],[f.Method,s.languages.CompletionItemKind.Method],[f.Function,s.languages.CompletionItemKind.Function],[f.Constructor,s.languages.CompletionItemKind.Constructor],[f.Field,s.languages.CompletionItemKind.Field],[f.Variable,s.languages.CompletionItemKind.Variable],[f.Class,s.languages.CompletionItemKind.Class],[f.Interface,s.languages.CompletionItemKind.Interface],[f.Module,s.languages.CompletionItemKind.Module],[f.Property,s.languages.CompletionItemKind.Property],[f.Unit,s.languages.CompletionItemKind.Unit],[f.Value,s.languages.CompletionItemKind.Value],[f.Enum,s.languages.CompletionItemKind.Enum],[f.Keyword,s.languages.CompletionItemKind.Keyword],[f.Snippet,s.languages.CompletionItemKind.Snippet],[f.Color,s.languages.CompletionItemKind.Color],[f.File,s.languages.CompletionItemKind.File],[f.Reference,s.languages.CompletionItemKind.Reference],[f.Folder,s.languages.CompletionItemKind.Folder],[f.EnumMember,s.languages.CompletionItemKind.EnumMember],[f.Constant,s.languages.CompletionItemKind.Constant],[f.Struct,s.languages.CompletionItemKind.Struct],[f.Event,s.languages.CompletionItemKind.Event],[f.Operator,s.languages.CompletionItemKind.Operator],[f.TypeParameter,s.languages.CompletionItemKind.TypeParameter]]);function ht(e){return e?ue.get(e)??s.languages.CompletionItemKind.Text:s.languages.CompletionItemKind.Text}const de=new Map([[at.Deprecated,s.languages.CompletionItemTag.Deprecated]]);function mt(e){return de.get(e)}const pt=new Map([[s.languages.CompletionTriggerKind.Invoke,L.Invoked],[s.languages.CompletionTriggerKind.TriggerCharacter,L.TriggerCharacter],[s.languages.CompletionTriggerKind.TriggerForIncompleteCompletions,L.TriggerForIncompleteCompletions]]);function ft(e){return pt.get(e)??L.Invoked}const Dt=new Map([[ct.Snippet,s.languages.CompletionItemInsertTextRule.InsertAsSnippet]]);function vt(e){if(e)return Dt.get(e)}const ge=new Map([[m.File,s.languages.SymbolKind.File],[m.Module,s.languages.SymbolKind.Module],[m.Namespace,s.languages.SymbolKind.Namespace],[m.Package,s.languages.SymbolKind.Package],[m.Class,s.languages.SymbolKind.Class],[m.Method,s.languages.SymbolKind.Method],[m.Property,s.languages.SymbolKind.Property],[m.Field,s.languages.SymbolKind.Field],[m.Constructor,s.languages.SymbolKind.Constructor],[m.Enum,s.languages.SymbolKind.Enum],[m.Interface,s.languages.SymbolKind.Interface],[m.Function,s.languages.SymbolKind.Function],[m.Variable,s.languages.SymbolKind.Variable],[m.Constant,s.languages.SymbolKind.Constant],[m.String,s.languages.SymbolKind.String],[m.Number,s.languages.SymbolKind.Number],[m.Boolean,s.languages.SymbolKind.Boolean],[m.Array,s.languages.SymbolKind.Array],[m.Object,s.languages.SymbolKind.Object],[m.Key,s.languages.SymbolKind.Key],[m.Null,s.languages.SymbolKind.Null],[m.EnumMember,s.languages.SymbolKind.EnumMember],[m.Struct,s.languages.SymbolKind.Struct],[m.Event,s.languages.SymbolKind.Event],[m.Operator,s.languages.SymbolKind.Operator],[m.TypeParameter,s.languages.SymbolKind.TypeParameter]]);function he(e){return ge.get(e)??s.languages.SymbolKind.File}const wt=new Map([[se.Deprecated,s.languages.SymbolTag.Deprecated]]);function me(e){return wt.get(e)}const xt=new Map([[U.Text,s.languages.DocumentHighlightKind.Text],[U.Read,s.languages.DocumentHighlightKind.Read],[U.Write,s.languages.DocumentHighlightKind.Write]]);function _t(e){return e?xt.get(e)??s.languages.DocumentHighlightKind.Text:s.languages.DocumentHighlightKind.Text}const yt=new Map([[R.Comment,s.languages.FoldingRangeKind.Comment],[R.Imports,s.languages.FoldingRangeKind.Imports],[R.Region,s.languages.FoldingRangeKind.Region]]);function bt(e){if(e)return yt.get(e)}const kt=new Map([[s.MarkerSeverity.Error,_.Error],[s.MarkerSeverity.Warning,_.Warning],[s.MarkerSeverity.Info,_.Information],[s.MarkerSeverity.Hint,_.Hint]]);function St(e){return kt.get(e)??_.Error}const Ct=new Map([[_.Error,s.MarkerSeverity.Error],[_.Warning,s.MarkerSeverity.Warning],[_.Information,s.MarkerSeverity.Info],[_.Hint,s.MarkerSeverity.Hint]]);function Rt(e){return e?Ct.get(e)??s.MarkerSeverity.Error:s.MarkerSeverity.Error}const pe=new Map([[ce.Unnecessary,s.MarkerTag.Unnecessary],[ce.Deprecated,s.MarkerTag.Deprecated]]);function Tt(e){return pe.get(e)}const Mt=new Map([[s.languages.SignatureHelpTriggerKind.Invoke,H.Invoked],[s.languages.SignatureHelpTriggerKind.TriggerCharacter,H.TriggerCharacter],[s.languages.SignatureHelpTriggerKind.ContentChange,H.ContentChange]]);function Et(e){return Mt.get(e)??H.Invoked}function T(e){if(e)return{id:e.command,title:e.title,arguments:e.arguments}}const Ft=new Map([[ae.Type,s.languages.InlayHintKind.Type],[ae.Parameter,s.languages.InlayHintKind.Parameter]]);function Pt(e){return e?Ft.get(e)??s.languages.InlayHintKind.Type:s.languages.InlayHintKind.Type}function b(e,t){if("targetUri"in e){const n=t.bridge.translateBackRange({uri:e.targetUri},e.targetRange);return{uri:n.textModel.uri,range:n.range,originSelectionRange:e.originSelectionRange?t.bridge.translateBackRange({uri:e.targetUri},e.originSelectionRange).range:void 0,targetSelectionRange:e.targetSelectionRange?t.bridge.translateBackRange({uri:e.targetUri},e.targetSelectionRange).range:void 0}}else{const n=t.bridge.translateBackRange({uri:e.uri},e.range);return{uri:n.textModel.uri,range:n.range}}}function v(e){return!e||e.length===0?{language:"*"}:e.map(t=>"notebook"in t?typeof t.notebook=="string"?{notebookType:t.notebook,language:t.language}:{notebookType:t.notebook.notebookType,language:t.language,pattern:t.notebook.pattern,scheme:t.notebook.scheme}:{language:t.language,pattern:t.pattern,scheme:t.scheme})}function Lt(e,t){if(!t)return!0;const n=e.getLanguageId();if(e.uri.toString(!0),!t||t.length===0)return!0;for(const r of t)if(!(r.language&&r.language!=="*"&&r.language!==n))return!0;return!1}function J(e){const t={severity:Rt(e.severity),startLineNumber:e.range.start.line+1,startColumn:e.range.start.character+1,endLineNumber:e.range.end.line+1,endColumn:e.range.end.character+1,message:e.message,source:e.source,code:typeof e.code=="string"?e.code:e.code?.toString()};return e.tags&&(t.tags=e.tags.map(n=>Tt(n)).filter(n=>n!==void 0)),e.relatedInformation&&(t.relatedInformation=e.relatedInformation.map(n=>({resource:s.Uri.parse(n.location.uri),startLineNumber:n.location.range.start.line+1,startColumn:n.location.range.start.character+1,endLineNumber:n.location.range.end.line+1,endColumn:n.location.range.end.character+1,message:n.message}))),t}var Ht=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{completion:{dynamicRegistration:!0,contextSupport:!0,completionItemKind:{valueSet:Array.from(ue.keys())},completionItem:{tagSupport:{valueSet:Array.from(de.keys())},commitCharactersSupport:!0,deprecatedSupport:!0,preselectSupport:!0}}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentCompletion,!0,t=>s.languages.registerCompletionItemProvider(v(t.documentSelector),new It(this._connection,t))))}},It=class{resolveCompletionItem;constructor(e,t){this._client=e,this._capabilities=t,t.resolveProvider&&(this.resolveCompletionItem=async(n,r)=>(fe(n,await this._client.server.completionItemResolve(n._lspItem),this._client.bridge,n._translated,n._model),n))}get triggerCharacters(){return this._capabilities.triggerCharacters}async provideCompletionItems(e,t,n,r){const i=this._client.bridge.translate(e,t),o=await this._client.server.textDocumentCompletion({textDocument:i.textDocument,position:i.position,context:n.triggerCharacter?{triggerKind:ft(n.triggerKind),triggerCharacter:n.triggerCharacter}:void 0});return o?{suggestions:(Array.isArray(o)?o:o.items).map(a=>({...Ot(a,this._client.bridge,i,e,t),_lspItem:a,_translated:i,_model:e}))}:{suggestions:[]}}};function Ot(e,t,n,r,i){let o=e.insertText||e.label,a;e.textEdit&&("range"in e.textEdit?(o=e.textEdit.newText,a=k(t.translateBackRange(n.textDocument,e.textEdit.range),r).range):(o=e.textEdit.newText,a={insert:k(t.translateBackRange(n.textDocument,e.textEdit.insert),r).range,replace:k(t.translateBackRange(n.textDocument,e.textEdit.replace),r).range})),a||(a=s.Range.fromPositions(i,i));const l={label:e.label,kind:ht(e.kind),insertText:o,sortText:e.sortText,filterText:e.filterText,preselect:e.preselect,commitCharacters:e.commitCharacters,range:a};return fe(l,e,t,n,r),l}function fe(e,t,n,r,i){t.detail!==void 0&&(e.detail=t.detail),t.documentation!==void 0&&(e.documentation=At(t.documentation)),t.insertTextFormat!==void 0&&(e.insertTextRules=vt(t.insertTextFormat)),t.tags&&t.tags.length>0&&(e.tags=t.tags.map(mt).filter(o=>o!==void 0)),t.additionalTextEdits&&t.additionalTextEdits.length>0&&(e.additionalTextEdits=t.additionalTextEdits.map(o=>({range:k(n.translateBackRange(r.textDocument,o.range),i).range,text:o.newText}))),t.command&&(e.command=T(t.command))}function At(e){if(e)return typeof e=="string"?e:{value:e.value,isTrusted:!0}}var Nt=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{hover:{dynamicRegistration:!0,contentFormat:[P.Markdown,P.PlainText]}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentHover,!0,t=>s.languages.registerHoverProvider(v(t.documentSelector),new Wt(this._connection,t))))}},Wt=class{constructor(e,t){this._client=e,this._capabilities=t}async provideHover(e,t,n){const r=this._client.bridge.translate(e,t),i=await this._client.server.textDocumentHover({textDocument:r.textDocument,position:r.position});return!i||!i.contents?null:{contents:zt(i.contents),range:i.range?this._client.bridge.translateBackRange(r.textDocument,i.range).range:void 0}}};function zt(e){return Array.isArray(e)?e.map(t=>De(t)):[De(e)]}function De(e){return typeof e=="string"?{value:e,isTrusted:!0}:"kind"in e?{value:e.value,isTrusted:!0}:{value:`\`\`\`${e.language}
-${e.value}
-\`\`\``,isTrusted:!0}}var qt=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{signatureHelp:{dynamicRegistration:!0,contextSupport:!0,signatureInformation:{documentationFormat:[P.Markdown,P.PlainText],parameterInformation:{labelOffsetSupport:!0},activeParameterSupport:!0}}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentSignatureHelp,!0,t=>s.languages.registerSignatureHelpProvider(v(t.documentSelector),new jt(this._connection,t))))}},jt=class{signatureHelpTriggerCharacters;signatureHelpRetriggerCharacters;constructor(e,t){this._client=e,this._capabilities=t,this.signatureHelpTriggerCharacters=t.triggerCharacters,this.signatureHelpRetriggerCharacters=t.retriggerCharacters}async provideSignatureHelp(e,t,n,r){const i=this._client.bridge.translate(e,t),o=await this._client.server.textDocumentSignatureHelp({textDocument:i.textDocument,position:i.position,context:{triggerKind:Et(r.triggerKind),triggerCharacter:r.triggerCharacter,isRetrigger:r.isRetrigger}});return o?{value:{signatures:o.signatures.map(a=>({label:a.label,documentation:ve(a.documentation),parameters:a.parameters?.map(l=>({label:l.label,documentation:ve(l.documentation)}))||[],activeParameter:a.activeParameter})),activeSignature:o.activeSignature||0,activeParameter:o.activeParameter||0},dispose:()=>{}}:null}};function ve(e){if(e)return typeof e=="string"?e:{value:e.value,isTrusted:!0}}var Ut=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{definition:{dynamicRegistration:!0,linkSupport:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentDefinition,!0,t=>s.languages.registerDefinitionProvider(v(t.documentSelector),new Bt(this._connection,t))))}},Bt=class{constructor(e,t){this._client=e,this._capabilities=t}async provideDefinition(e,t,n){const r=this._client.bridge.translate(e,t),i=await this._client.server.textDocumentDefinition({textDocument:r.textDocument,position:r.position});return i?Array.isArray(i)?i.map(o=>b(o,this._client)):b(i,this._client):null}},Vt=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{declaration:{dynamicRegistration:!0,linkSupport:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentDeclaration,!0,t=>s.languages.registerDeclarationProvider(v(t.documentSelector),new Jt(this._connection,t))))}},Jt=class{constructor(e,t){this._client=e,this._capabilities=t}async provideDeclaration(e,t,n){const r=this._client.bridge.translate(e,t),i=await this._client.server.textDocumentDeclaration({textDocument:r.textDocument,position:r.position});return i?Array.isArray(i)?i.map(o=>b(o,this._client)):b(i,this._client):null}},Gt=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{typeDefinition:{dynamicRegistration:!0,linkSupport:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentTypeDefinition,!0,t=>s.languages.registerTypeDefinitionProvider(v(t.documentSelector),new Qt(this._connection,t))))}},Qt=class{constructor(e,t){this._client=e,this._capabilities=t}async provideTypeDefinition(e,t,n){const r=this._client.bridge.translate(e,t),i=await this._client.server.textDocumentTypeDefinition({textDocument:r.textDocument,position:r.position});return i?Array.isArray(i)?i.map(o=>b(o,this._client)):b(i,this._client):null}},Xt=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{implementation:{dynamicRegistration:!0,linkSupport:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentImplementation,!0,t=>s.languages.registerImplementationProvider(v(t.documentSelector),new Yt(this._connection,t))))}},Yt=class{constructor(e,t){this._client=e,this._capabilities=t}async provideImplementation(e,t,n){const r=this._client.bridge.translate(e,t),i=await this._client.server.textDocumentImplementation({textDocument:r.textDocument,position:r.position});return i?Array.isArray(i)?i.map(o=>b(o,this._client)):b(i,this._client):null}},Zt=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{references:{dynamicRegistration:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentReferences,!0,t=>s.languages.registerReferenceProvider(v(t.documentSelector),new Kt(this._connection,t))))}},Kt=class{constructor(e,t){this._client=e,this._capabilities=t}async provideReferences(e,t,n,r){const i=this._client.bridge.translate(e,t),o=await this._client.server.textDocumentReferences({textDocument:i.textDocument,position:i.position,context:{includeDeclaration:n.includeDeclaration}});return o?o.map(a=>{const l=this._client.bridge.translateBackRange({uri:a.uri},a.range);return{uri:l.textModel.uri,range:l.range}}):null}},$t=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{documentHighlight:{dynamicRegistration:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentDocumentHighlight,!0,t=>s.languages.registerDocumentHighlightProvider(v(t.documentSelector),new en(this._connection,t))))}},en=class{constructor(e,t){this._client=e,this._capabilities=t}async provideDocumentHighlights(e,t,n){const r=this._client.bridge.translate(e,t),i=await this._client.server.textDocumentDocumentHighlight({textDocument:r.textDocument,position:r.position});return i?i.map(o=>({range:this._client.bridge.translateBackRange(r.textDocument,o.range).range,kind:_t(o.kind)})):null}},tn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{documentSymbol:{dynamicRegistration:!0,hierarchicalDocumentSymbolSupport:!0,symbolKind:{valueSet:Array.from(ge.keys())},tagSupport:{valueSet:[se.Deprecated]}}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentDocumentSymbol,!0,t=>s.languages.registerDocumentSymbolProvider(v(t.documentSelector),new nn(this._connection,t))))}},nn=class{constructor(e,t){this._client=e,this._capabilities=t}async provideDocumentSymbols(e,t){const n=this._client.bridge.translate(e,new s.Position(1,1)),r=await this._client.server.textDocumentDocumentSymbol({textDocument:n.textDocument});return r?Array.isArray(r)&&r.length>0?"location"in r[0]?r.map(i=>rn(i,this._client)):r.map(i=>we(i,this._client,n.textDocument)):[]:null}};function we(e,t,n){return{name:e.name,detail:e.detail||"",kind:he(e.kind),tags:e.tags?.map(r=>me(r)).filter(r=>r!==void 0)||[],range:t.bridge.translateBackRange(n,e.range).range,selectionRange:t.bridge.translateBackRange(n,e.selectionRange).range,children:e.children?.map(r=>we(r,t,n))||[]}}function rn(e,t){return{name:e.name,detail:"",kind:he(e.kind),tags:e.tags?.map(n=>me(n)).filter(n=>n!==void 0)||[],range:t.bridge.translateBackRange({uri:e.location.uri},e.location.range).range,selectionRange:t.bridge.translateBackRange({uri:e.location.uri},e.location.range).range,children:[]}}var on=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{rename:{dynamicRegistration:!0,prepareSupport:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentRename,!0,t=>s.languages.registerRenameProvider(v(t.documentSelector),new sn(this._connection,t))))}},sn=class{constructor(e,t){this._client=e,this._capabilities=t}async provideRenameEdits(e,t,n,r){const i=this._client.bridge.translate(e,t),o=await this._client.server.textDocumentRename({textDocument:i.textDocument,position:i.position,newName:n});return o?an(o,this._client):null}async resolveRenameLocation(e,t,n){if(!this._capabilities.prepareProvider)return null;const r=this._client.bridge.translate(e,t),i=await this._client.server.textDocumentPrepareRename({textDocument:r.textDocument,position:r.position});if(!i)return null;if("range"in i&&"placeholder"in i)return{range:this._client.bridge.translateBackRange(r.textDocument,i.range).range,text:i.placeholder};if("defaultBehavior"in i)return null;if("start"in i&&"end"in i){const o=this._client.bridge.translateBackRange(r.textDocument,i).range;return{range:o,text:e.getValueInRange(o)}}return null}};function an(e,t){const n=[];if(e.changes)for(const r in e.changes){const i=e.changes[r];for(const o of i){const a=t.bridge.translateBackRange({uri:r},o.range);n.push({resource:a.textModel.uri,versionId:void 0,textEdit:{range:a.range,text:o.newText}})}}if(e.documentChanges){for(const r of e.documentChanges)if("textDocument"in r){const i=r.textDocument.uri;for(const o of r.edits){const a=t.bridge.translateBackRange({uri:i},o.range);n.push({resource:a.textModel.uri,versionId:r.textDocument.version,textEdit:{range:a.range,text:o.newText}})}}}return{edits:n}}var cn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{codeAction:{dynamicRegistration:!0,codeActionLiteralSupport:{codeActionKind:{valueSet:Array.from(le.keys())}},isPreferredSupport:!0,disabledSupport:!0,dataSupport:!0,resolveSupport:{properties:["edit"]}}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentCodeAction,!0,t=>s.languages.registerCodeActionProvider(v(t.documentSelector),new ln(this._connection,t))))}},ln=class{resolveCodeAction;constructor(e,t){this._client=e,this._capabilities=t,t.resolveProvider&&(this.resolveCodeAction=async(n,r)=>{if(n._lspAction){const i=await this._client.server.codeActionResolve(n._lspAction);i.edit&&(n.edit=xe(i.edit,this._client)),i.command&&(n.command=T(i.command))}return n})}async provideCodeActions(e,t,n,r){const i=this._client.bridge.translate(e,t.getStartPosition()),o=await this._client.server.textDocumentCodeAction({textDocument:i.textDocument,range:this._client.bridge.translateRange(e,t),context:{diagnostics:n.markers.map(a=>({range:this._client.bridge.translateRange(e,s.Range.lift(a)),message:a.message,severity:St(a.severity)})),triggerKind:gt(n.trigger)}});return o?{actions:(Array.isArray(o)?o:[o]).map(a=>{if("title"in a&&!("kind"in a)){const l=a;return{title:l.title,command:T(l)}}else{const l=a;return{title:l.title,kind:ut(l.kind),isPreferred:l.isPreferred,disabled:l.disabled?.reason,edit:l.edit?xe(l.edit,this._client):void 0,command:T(l.command),_lspAction:l}}}),dispose:()=>{}}:null}};function xe(e,t){const n=[];if(e.changes)for(const r in e.changes){const i=e.changes[r];for(const o of i){const a=t.bridge.translateBackRange({uri:r},o.range);n.push({resource:a.textModel.uri,versionId:void 0,textEdit:{range:a.range,text:o.newText}})}}if(e.documentChanges){for(const r of e.documentChanges)if("textDocument"in r){const i=r.textDocument.uri;for(const o of r.edits){const a=t.bridge.translateBackRange({uri:i},o.range);n.push({resource:a.textModel.uri,versionId:r.textDocument.version??void 0,textEdit:{range:a.range,text:o.newText}})}}}return{edits:n}}var un=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{codeLens:{dynamicRegistration:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentCodeLens,!0,t=>s.languages.registerCodeLensProvider(v(t.documentSelector),new dn(this._connection,t))))}},dn=class{constructor(e,t){this._client=e,this._capabilities=t}async provideCodeLenses(e,t){const n=this._client.bridge.translate(e,new s.Position(1,1)),r=await this._client.server.textDocumentCodeLens({textDocument:n.textDocument});return r?{lenses:r.map(i=>({range:k(this._client.bridge.translateBackRange(n.textDocument,i.range),e).range,command:T(i.command),_lspCodeLens:i})),dispose:()=>{}}:null}async resolveCodeLens(e,t,n){if(!this._capabilities.resolveProvider||!t._lspCodeLens)return t;const r=await this._client.server.codeLensResolve(t._lspCodeLens);return r.command&&(t.command={id:r.command.command,title:r.command.title,arguments:r.command.arguments}),t}},gn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{documentLink:{dynamicRegistration:!0,tooltipSupport:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentDocumentLink,!0,t=>s.languages.registerLinkProvider(v(t.documentSelector),new hn(this._connection,t))))}},hn=class{constructor(e,t){this._client=e,this._capabilities=t}async provideLinks(e,t){const n=this._client.bridge.translate(e,new s.Position(1,1)),r=await this._client.server.textDocumentDocumentLink({textDocument:n.textDocument});return r?{links:r.map(i=>({range:this._client.bridge.translateBackRange(n.textDocument,i.range).range,url:i.target,tooltip:i.tooltip}))}:null}async resolveLink(e,t){return this._capabilities.resolveProvider,e}},mn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{formatting:{dynamicRegistration:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentFormatting,!0,t=>s.languages.registerDocumentFormattingEditProvider(v(t.documentSelector),new pn(this._connection,t))))}},pn=class{constructor(e,t){this._client=e,this._capabilities=t}async provideDocumentFormattingEdits(e,t,n){const r=this._client.bridge.translate(e,new s.Position(1,1)),i=await this._client.server.textDocumentFormatting({textDocument:r.textDocument,options:{tabSize:t.tabSize,insertSpaces:t.insertSpaces}});return i?i.map(o=>({range:this._client.bridge.translateBackRange(r.textDocument,o.range).range,text:o.newText})):null}},fn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{rangeFormatting:{dynamicRegistration:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentRangeFormatting,!0,t=>s.languages.registerDocumentRangeFormattingEditProvider(v(t.documentSelector),new Dn(this._connection,t))))}},Dn=class{constructor(e,t){this._client=e,this._capabilities=t}async provideDocumentRangeFormattingEdits(e,t,n,r){const i=this._client.bridge.translate(e,t.getStartPosition()),o=await this._client.server.textDocumentRangeFormatting({textDocument:i.textDocument,range:this._client.bridge.translateRange(e,t),options:{tabSize:n.tabSize,insertSpaces:n.insertSpaces}});return o?o.map(a=>({range:this._client.bridge.translateBackRange(i.textDocument,a.range).range,text:a.newText})):null}},vn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{onTypeFormatting:{dynamicRegistration:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentOnTypeFormatting,!0,t=>s.languages.registerOnTypeFormattingEditProvider(v(t.documentSelector),new wn(this._connection,t))))}},wn=class{autoFormatTriggerCharacters;constructor(e,t){this._client=e,this._capabilities=t,this.autoFormatTriggerCharacters=[t.firstTriggerCharacter,...t.moreTriggerCharacter||[]]}async provideOnTypeFormattingEdits(e,t,n,r,i){const o=this._client.bridge.translate(e,t),a=await this._client.server.textDocumentOnTypeFormatting({textDocument:o.textDocument,position:o.position,ch:n,options:{tabSize:r.tabSize,insertSpaces:r.insertSpaces}});return a?a.map(l=>({range:this._client.bridge.translateBackRange(o.textDocument,l.range).range,text:l.newText})):null}},xn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{foldingRange:{dynamicRegistration:!0,rangeLimit:5e3,lineFoldingOnly:!1,foldingRangeKind:{valueSet:[R.Comment,R.Imports,R.Region]}}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentFoldingRange,!0,t=>s.languages.registerFoldingRangeProvider(v(t.documentSelector),new _n(this._connection,t))))}},_n=class{constructor(e,t){this._client=e,this._capabilities=t}async provideFoldingRanges(e,t,n){const r=this._client.bridge.translate(e,new s.Position(1,1)),i=await this._client.server.textDocumentFoldingRange({textDocument:r.textDocument});return i?i.map(o=>({start:o.startLine+1,end:o.endLine+1,kind:bt(o.kind)})):null}},yn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{selectionRange:{dynamicRegistration:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentSelectionRange,!0,t=>s.languages.registerSelectionRangeProvider(v(t.documentSelector),new bn(this._connection,t))))}},bn=class{constructor(e,t){this._client=e,this._capabilities=t}async provideSelectionRanges(e,t,n){const r=this._client.bridge.translate(e,t[0]),i=await this._client.server.textDocumentSelectionRange({textDocument:r.textDocument,positions:t.map(o=>this._client.bridge.translate(e,o).position)});return i?i.map(o=>this.convertSelectionRange(o,r.textDocument)):null}convertSelectionRange(e,t){const n=[];let r=e;for(;r;)n.push({range:this._client.bridge.translateBackRange(t,r.range).range}),r=r.parent;return n}},kn=class extends p{_providers=new Set;constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{inlayHint:{dynamicRegistration:!0,resolveSupport:{properties:["tooltip","textEdits","label.tooltip","label.location","label.command"]}}},workspace:{inlayHint:{refreshSupport:!0}}})),this._register(this._connection.connection.registerRequestHandler(E.client.workspaceInlayHintRefresh,async()=>{for(const t of this._providers)t.refresh();return{ok:null}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentInlayHint,!0,t=>{const n=new Sn(this._connection,t);this._providers.add(n);const r=s.languages.registerInlayHintsProvider(v(t.documentSelector),n);return{dispose:()=>{this._providers.delete(n),r.dispose()}}}))}},Sn=class{_onDidChangeInlayHints=new s.Emitter;onDidChangeInlayHints=this._onDidChangeInlayHints.event;resolveInlayHint;constructor(e,t){this._client=e,this._capabilities=t,t.resolveProvider&&(this.resolveInlayHint=async(n,r)=>{const i=await this._client.server.inlayHintResolve(n._lspInlayHint);return i.tooltip&&(n.tooltip=G(i.tooltip)),i.label!==n._lspInlayHint.label&&(n.label=_e(i.label)),i.textEdits&&(n.textEdits=i.textEdits.map(o=>({range:this._client.bridge.translateBackRange({uri:n._targetUri},o.range).range,text:o.newText}))),n})}refresh(){this._onDidChangeInlayHints.fire()}async provideInlayHints(e,t,n){const r=this._client.bridge.translate(e,t.getStartPosition()),i=await Cn(async()=>await this._client.server.textDocumentInlayHint({textDocument:r.textDocument,range:this._client.bridge.translateRange(e,t)}));return i?{hints:i.map(o=>({label:_e(o.label),position:k(this._client.bridge.translateBack(r.textDocument,o.position),e).position,kind:Pt(o.kind),tooltip:G(o.tooltip),paddingLeft:o.paddingLeft,paddingRight:o.paddingRight,textEdits:o.textEdits?.map(a=>({range:k(this._client.bridge.translateBackRange(r.textDocument,a.range),e).range,text:a.newText})),_lspInlayHint:o,_targetUri:r.textDocument.uri})),dispose:()=>{}}:null}};async function Cn(e){for(let t=3;;t--)try{return await e()}catch(n){if(n.message==="content modified"&&t>0)continue;throw n}}function _e(e){return typeof e=="string"?e:e.map(t=>{const n={label:t.value,tooltip:G(t.tooltip),command:T(t.command)};return t.location&&(n.location={uri:s.Uri.parse(t.location.uri),range:new s.Range(t.location.range.start.line+1,t.location.range.start.character+1,t.location.range.end.line+1,t.location.range.end.character+1)}),n})}function G(e){if(e)return typeof e=="string"?e:{value:e.value,isTrusted:!0}}var Rn=class extends p{constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{semanticTokens:{dynamicRegistration:!0,requests:{range:!0,full:{delta:!0}},tokenTypes:["namespace","type","class","enum","interface","struct","typeParameter","parameter","variable","property","enumMember","event","function","method","macro","keyword","modifier","comment","string","number","regexp","operator","decorator"],tokenModifiers:["declaration","definition","readonly","static","deprecated","abstract","async","modification","documentation","defaultLibrary"],formats:[lt.Relative],overlappingTokenSupport:!1,multilineTokenSupport:!0}}})),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentSemanticTokensFull,!0,t=>s.languages.registerDocumentSemanticTokensProvider(v(t.documentSelector),new Tn(this._connection,t))))}},Tn=class{constructor(e,t){this._client=e,this._capabilities=t}getLegend(){return{tokenTypes:this._capabilities.legend.tokenTypes,tokenModifiers:this._capabilities.legend.tokenModifiers}}releaseDocumentSemanticTokens(e){}async provideDocumentSemanticTokens(e,t,n){const r=this._client.bridge.translate(e,e.getPositionAt(0)),i=this._capabilities.full;if(t&&i&&typeof i=="object"&&i.delta){const a=await this._client.server.textDocumentSemanticTokensFullDelta({textDocument:r.textDocument,previousResultId:t});return a?"edits"in a?{resultId:a.resultId,edits:a.edits.map(l=>({start:l.start,deleteCount:l.deleteCount,data:l.data?new Uint32Array(l.data):void 0}))}:{resultId:a.resultId,data:new Uint32Array(a.data)}:null}const o=await this._client.server.textDocumentSemanticTokensFull({textDocument:r.textDocument});return o?{resultId:o.resultId,data:new Uint32Array(o.data)}:null}async provideDocumentSemanticTokensEdits(e,t,n){return this.provideDocumentSemanticTokens(e,t,n)}},Mn=class extends p{_diagnosticsMarkerOwner="lsp";_pullDiagnosticProviders=new Map;constructor(e){super(),this._connection=e,this._register(this._connection.capabilities.addStaticClientCapabilities({textDocument:{publishDiagnostics:{relatedInformation:!0,tagSupport:{valueSet:[...pe.keys()]},versionSupport:!0,codeDescriptionSupport:!0,dataSupport:!0},diagnostic:{dynamicRegistration:!0,relatedDocumentSupport:!0}}}));debugger;this._register(this._connection.connection.registerNotificationHandler(E.client.textDocumentPublishDiagnostics,t=>this._handlePublishDiagnostics(t))),this._register(this._connection.capabilities.registerCapabilityHandler(u.textDocumentDiagnostic,!0,t=>{const n=new V;for(const r of s.editor.getModels())this._addPullDiagnosticProvider(r,t,n);return n.add(s.editor.onDidCreateModel(r=>{this._addPullDiagnosticProvider(r,t,n)})),n}))}_addPullDiagnosticProvider(e,t,n){if(e.getLanguageId(),!Lt(e,t.documentSelector))return;const r=new En(e,this._connection,this._diagnosticsMarkerOwner,t);this._pullDiagnosticProviders.set(e,r),n.add(r),n.add(e.onWillDispose(()=>{this._pullDiagnosticProviders.delete(e)}))}_handlePublishDiagnostics(e){const t=e.uri;try{const n=this._connection.bridge.translateBack({uri:t},{line:0,character:0}).textModel;if(!n||n.isDisposed())return;const r=e.diagnostics.map(i=>J(i));s.editor.setModelMarkers(n,this._diagnosticsMarkerOwner,r)}catch(n){console.debug(`Could not set diagnostics for ${t}:`,n)}}},En=class extends p{_updateHandle;_previousResultId;constructor(e,t,n,r){super(),this._model=e,this._connection=t,this._markerOwner=n,this._capability=r,this._register(this._model.onDidChangeContent(()=>{this._scheduleDiagnosticUpdate()})),this._scheduleDiagnosticUpdate()}_scheduleDiagnosticUpdate(){this._updateHandle!==void 0&&clearTimeout(this._updateHandle),this._updateHandle=window.setTimeout(()=>{this._updateHandle=void 0,this._requestDiagnostics()},500)}async _requestDiagnostics(){if(!this._model.isDisposed())try{const e=this._connection.bridge.translate(this._model,new s.Position(1,1)),t=await this._connection.server.textDocumentDiagnostic({textDocument:e.textDocument,identifier:this._capability.identifier,previousResultId:this._previousResultId});if(this._model.isDisposed())return;this._handleDiagnosticReport(t)}catch(e){console.error("Error requesting diagnostics:",e)}}_handleDiagnosticReport(e){if(e.kind==="full"){this._previousResultId=e.resultId;const t=e.items.map(n=>J(n));s.editor.setModelMarkers(this._model,this._markerOwner,t),"relatedDocuments"in e&&e.relatedDocuments&&this._handleRelatedDocuments(e.relatedDocuments)}else e.kind==="unchanged"&&(this._previousResultId=e.resultId)}_handleRelatedDocuments(e){for(const[t,n]of Object.entries(e))try{const r=this._connection.bridge.translateBack({uri:t},{line:0,character:0}).textModel;if(!r||r.isDisposed())continue;if(n.kind==="full"){const i=n.items.map(o=>J(o));s.editor.setModelMarkers(r,this._markerOwner,i)}}catch(r){console.debug(`Could not set related diagnostics for ${t}:`,r)}}dispose(){this._updateHandle!==void 0&&(clearTimeout(this._updateHandle),this._updateHandle=void 0),super.dispose()}},Fn=class{constructor(e,t,n,r){this.server=e,this.bridge=t,this.capabilities=n,this.connection=r}},Pn=class extends p{_staticCapabilities=new Set;_dynamicFromStatic=In.create();_registrations=new Map;_serverCapabilities=void 0;constructor(e){super(),this._connection=e,this._register(this._connection.registerRequestHandler(E.client.clientRegisterCapability,async t=>{for(const n of t.registrations){const r=be(n.method),i=new ye(n.id,r,n.registerOptions,!1);this._registerCapabilityOptions(i)}return{ok:null}})),this._register(this._connection.registerRequestHandler(E.client.clientUnregisterCapability,async t=>{for(const n of t.unregisterations){const r=be(n.method),i=this._registrations.get(r),o=i?.registrations.get(n.id);if(!o)throw new Error(`No registration for method ${n.method} with id ${n.id}`);o?.handlerDisposables.forEach(a=>a.dispose()),i?.registrations.delete(n.id)}return{ok:null}}))}_registerCapabilityOptions(e){let t=this._registrations.get(e.capability);if(t||(t=new ke,this._registrations.set(e.capability,t)),t.registrations.has(e.id))throw new Error(`Handler for method ${e.capability.method} with id ${e.id} already registered`);t.registrations.set(e.id,e);for(const n of t.handlers)!n.handleStaticCapability&&e.isFromStatic||e.handlerDisposables.set(n,n.handler(e.options))}setServerCapabilities(e){if(this._serverCapabilities)throw new Error("Server capabilities already set");this._serverCapabilities=e;for(const t of Object.values(u)){const n=this._dynamicFromStatic.getOptions(t,e);n&&this._registerCapabilityOptions(new ye(t.method,t,n,!0))}}getClientCapabilities(){const e={};for(const t of this._staticCapabilities)Se(e,t.cap);return e}addStaticClientCapabilities(e){const t={cap:e};return this._staticCapabilities.add(t),{dispose:()=>{this._staticCapabilities.delete(t)}}}registerCapabilityHandler(e,t,n){let r=this._registrations.get(e);r||(r=new ke,this._registrations.set(e,r));const i=new Ln(e,t,n);r.handlers.add(i);for(const o of r.registrations.values())!i.handleStaticCapability&&o.isFromStatic||o.handlerDisposables.set(i,n(o.options));return{dispose:()=>{r.handlers.delete(i);for(const o of r.registrations.values()){const a=o.handlerDisposables.get(i);a&&(a.dispose(),o.handlerDisposables.delete(i))}}}}},Ln=class{constructor(e,t,n){this.capability=e,this.handleStaticCapability=t,this.handler=n}},ye=class{handlerDisposables=new Map;constructor(e,t,n,r){this.id=e,this.capability=t,this.options=n,this.isFromStatic=r}};const Hn=new Map([...Object.values(u)].map(e=>[e.method,e]));function be(e){const t=Hn.get(e);if(!t)throw new Error(`No capability found for method ${e}`);return t}var ke=class{handlers=new Set;registrations=new Map},In=class Ae{_mappings=new Map;static create(){const t=new Ae;return t.set(u.textDocumentDidChange,n=>{if(n.textDocumentSync!==void 0)return typeof n.textDocumentSync=="object"?{syncKind:n.textDocumentSync.change??st.None,documentSelector:null}:{syncKind:n.textDocumentSync,documentSelector:null}}),t.set(u.textDocumentCompletion,n=>n.completionProvider),t.set(u.textDocumentHover,n=>n.hoverProvider),t.set(u.textDocumentSignatureHelp,n=>n.signatureHelpProvider),t.set(u.textDocumentDefinition,n=>n.definitionProvider),t.set(u.textDocumentReferences,n=>n.referencesProvider),t.set(u.textDocumentDocumentHighlight,n=>n.documentHighlightProvider),t.set(u.textDocumentDocumentSymbol,n=>n.documentSymbolProvider),t.set(u.textDocumentCodeAction,n=>n.codeActionProvider),t.set(u.textDocumentCodeLens,n=>n.codeLensProvider),t.set(u.textDocumentDocumentLink,n=>n.documentLinkProvider),t.set(u.textDocumentFormatting,n=>n.documentFormattingProvider),t.set(u.textDocumentRangeFormatting,n=>n.documentRangeFormattingProvider),t.set(u.textDocumentOnTypeFormatting,n=>n.documentOnTypeFormattingProvider),t.set(u.textDocumentRename,n=>n.renameProvider),t.set(u.textDocumentFoldingRange,n=>n.foldingRangeProvider),t.set(u.textDocumentDeclaration,n=>n.declarationProvider),t.set(u.textDocumentTypeDefinition,n=>n.typeDefinitionProvider),t.set(u.textDocumentImplementation,n=>n.implementationProvider),t.set(u.textDocumentDocumentColor,n=>n.colorProvider),t.set(u.textDocumentSelectionRange,n=>n.selectionRangeProvider),t.set(u.textDocumentLinkedEditingRange,n=>n.linkedEditingRangeProvider),t.set(u.textDocumentPrepareCallHierarchy,n=>n.callHierarchyProvider),t.set(u.textDocumentSemanticTokensFull,n=>n.semanticTokensProvider),t.set(u.textDocumentInlayHint,n=>n.inlayHintProvider),t.set(u.textDocumentInlineValue,n=>n.inlineValueProvider),t.set(u.textDocumentDiagnostic,n=>n.diagnosticProvider),t.set(u.textDocumentMoniker,n=>n.monikerProvider),t.set(u.textDocumentPrepareTypeHierarchy,n=>n.typeHierarchyProvider),t.set(u.workspaceSymbol,n=>n.workspaceSymbolProvider),t.set(u.workspaceExecuteCommand,n=>n.executeCommandProvider),t}set(t,n){if(this._mappings.has(t.method))throw new Error(`Capability for method ${t.method} already registered`);this._mappings.set(t.method,n)}getOptions(t,n){const r=this._mappings.get(t.method);if(r)return r(n)}};function Se(e,t){for(const n of Object.keys(t)){const r=t[n];if(r===void 0)continue;const i=e[n];if(i===void 0){e[n]=r;continue}if(typeof r!="object"||r===null){e[n]=r;continue}if(typeof i!="object"||i===null){e[n]=r;continue}Se(i,r)}}var On=class extends p{_managedModels=new Map;_managedModelsReverse=new Map;_started=!1;constructor(e,t){super(),this._server=e,this._capabilities=t,this._register(this._capabilities.addStaticClientCapabilities({textDocument:{synchronization:{dynamicRegistration:!0,willSave:!1,willSaveWaitUntil:!1,didSave:!1}}})),this._register(t.registerCapabilityHandler(u.textDocumentDidChange,!0,n=>{if(this._started)return{dispose:()=>{}};this._started=!0,this._register(s.editor.onDidCreateModel(r=>{this._getOrCreateManagedModel(r)}));for(const r of s.editor.getModels())this._getOrCreateManagedModel(r);return{dispose:()=>{}}}))}_getOrCreateManagedModel(e){if(!this._started)throw new Error("Not started");const t=e.uri.toString(!0).toLowerCase();let n=this._managedModels.get(e);return n||(n=new An(e,this._server),this._managedModels.set(e,n),this._managedModelsReverse.set(t,e)),e.onWillDispose(()=>{n.dispose(),this._managedModels.delete(e),this._managedModelsReverse.delete(t)}),n}translateBack(e,t){const n=e.uri.toLowerCase(),r=this._managedModelsReverse.get(n);if(!r)throw new Error(`No text model for uri ${n}`);return{textModel:r,position:new s.Position(t.line+1,t.character+1)}}translateBackRange(e,t){const n=e.uri.toLowerCase(),r=this._managedModelsReverse.get(n);if(!r)throw new Error(`No text model for uri ${n}`);return{textModel:r,range:new s.Range(t.start.line+1,t.start.character+1,t.end.line+1,t.end.character+1)}}translate(e,t){return{textDocument:{uri:e.uri.toString(!0)},position:{line:t.lineNumber-1,character:t.column-1}}}translateRange(e,t){return{start:{line:t.startLineNumber-1,character:t.startColumn-1},end:{line:t.endLineNumber-1,character:t.endColumn-1}}}},An=class extends p{constructor(e,t){super(),this._textModel=e,this._api=t;const n=e.uri.toString(!0).toLowerCase();this._api.textDocumentDidOpen({textDocument:{languageId:e.getLanguageId(),uri:n,version:e.getVersionId(),text:e.getValue()}}),this._register(e.onDidChangeContent(r=>{const i=r.changes.map(o=>Nn(o));this._api.textDocumentDidChange({textDocument:{uri:n,version:e.getVersionId()},contentChanges:i})})),this._register({dispose:()=>{this._api.textDocumentDidClose({textDocument:{uri:n}})}})}};function Nn(e){return{range:Wn(e.range),rangeLength:e.rangeLength,text:e.text}}function Wn(e){return{start:{line:e.startLineNumber-1,character:e.startColumn-1},end:{line:e.endLineNumber-1,character:e.endColumn-1}}}var zn=class{_connection;_capabilitiesRegistry;_bridge;_initPromise;constructor(e){const t=j.fromTransport(e),n=E.getServer(t,{});t.startListen(),this._capabilitiesRegistry=new Pn(t),this._bridge=new On(n.server,this._capabilitiesRegistry),this._connection=new Fn(n.server,this._bridge,this._capabilitiesRegistry,t),this.createFeatures(),this._initPromise=this._init()}async _init(){const e=await this._connection.server.initialize({processId:null,capabilities:this._capabilitiesRegistry.getClientCapabilities(),rootUri:null});this._connection.server.initialized({}),this._capabilitiesRegistry.setServerCapabilities(e.capabilities)}createFeatures(){const e=new V;return e.add(new Ht(this._connection)),e.add(new Nt(this._connection)),e.add(new qt(this._connection)),e.add(new Ut(this._connection)),e.add(new Vt(this._connection)),e.add(new Gt(this._connection)),e.add(new Xt(this._connection)),e.add(new Zt(this._connection)),e.add(new $t(this._connection)),e.add(new tn(this._connection)),e.add(new on(this._connection)),e.add(new cn(this._connection)),e.add(new un(this._connection)),e.add(new gn(this._connection)),e.add(new mn(this._connection)),e.add(new fn(this._connection)),e.add(new vn(this._connection)),e.add(new xn(this._connection)),e.add(new yn(this._connection)),e.add(new kn(this._connection)),e.add(new Rn(this._connection)),e.add(new Mn(this._connection)),e}},M=null;typeof WebSocket<"u"?M=WebSocket:typeof MozWebSocket<"u"?M=MozWebSocket:typeof global<"u"?M=global.WebSocket||global.MozWebSocket:typeof window<"u"?M=window.WebSocket||window.MozWebSocket:typeof self<"u"&&(M=self.WebSocket||self.MozWebSocket);var qn=M;function jn(e){return"host"in e?{address:`${e.forceTls?"wss":"ws"}://${e.host}:${e.port}`}:e}var Un=class Y extends ${socket;static connectTo(t){const n=new qn(jn(t).address);return new Promise((r,i)=>{n.onerror=o=>{i(o)},n.onopen=()=>{r(new Y(n))}})}static fromWebSocket(t){return new Y(t)}errorEmitter=new z;onError=this.errorEmitter;constructor(t){super(),this.socket=t,t.onmessage=n=>{try{const r=n.data;if(typeof r=="string"){const i=JSON.parse(r);this._dispatchReceivedMessage(i)}else throw new Error("Not supported")}catch(r){this.errorEmitter.fire({error:r})}},t.onclose=n=>{this._onConnectionClosed()}}close(){this.socket.close()}dispose(){this.close()}_sendImpl(t){const n=JSON.stringify(t);return new Promise((r,i)=>{this.socket.send(n,o=>{o?i(o):r()})})}toString(){return`${this.id}@${this.socket.url}`}},Ce=class extends ${_windowLike;_source;_loadingState;_disposed=!1;constructor(e,t=void 0,n=void 0){super(),this._windowLike=e,this._source=t,this._loadingState=n,this._windowLike.addEventListener("message",this._messageHandler)}_messageHandler=({data:e,source:t})=>{this._source&&t!==this._source||typeof e=="object"&&e&&this._dispatchReceivedMessage(e)};async _sendImpl(e){if(this._disposed)throw new Error("Transport is disposed");this._loadingState&&!this._loadingState.loaded&&await this._loadingState.onLoaded,this._windowLike.postMessage(e)}toString(){return`${this.id}@${this._windowLike}`}dispose(){this._disposed||(this._disposed=!0,this._windowLike.removeEventListener("message",this._messageHandler))}};function Bn(e){if(typeof window>"u")throw new Error("call this function from the main browser thread");return new Ce(e)}function Vn(e){if(typeof window>"u")throw new Error("call this function from the main browser thread");return new Ce(e.contentWindow,e.contentWindow,{loaded:window.document.readyState==="complete",onLoaded:new Promise(t=>{window.addEventListener("load",()=>t())})})}const Re=Object.freeze(Object.defineProperty({__proto__:null,MonacoLspClient:zn,WebSocketTransport:Un,createTransportToIFrame:Vn,createTransportToWorker:Bn},Symbol.toStringTag,{value:"Module"}));function Te(){return s.monaco}globalThis.MonacoEnvironment?.globalAPI&&(globalThis.monaco=Te());const I=Te();I.languages.css=O.monaco_contribution,I.languages.html=A.monaco_contribution,I.languages.typescript=W.monaco_contribution,I.languages.json=N.monaco_contribution;const Jn=Object.freeze(Object.defineProperty({__proto__:null,CancellationTokenSource:s.CancellationTokenSource,Emitter:s.Emitter,KeyCode:s.KeyCode,KeyMod:s.KeyMod,MarkerSeverity:s.MarkerSeverity,MarkerTag:s.MarkerTag,Position:s.Position,Range:s.Range,Selection:s.Selection,SelectionDirection:s.SelectionDirection,Token:s.Token,Uri:s.Uri,createWebWorker:Z.createWebWorker,css:O.monaco_contribution,editor:s.editor,html:A.monaco_contribution,json:N.monaco_contribution,languages:s.languages,lsp:Re,typescript:W.monaco_contribution},Symbol.toStringTag,{value:"Module"}));typeof globalThis.require<"u"&&typeof globalThis.require.config=="function"&&globalThis.require.config({ignoreDuplicateModules:["vscode-languageserver-types","vscode-languageserver-types/main","vscode-languageserver-textdocument","vscode-languageserver-textdocument/main","vscode-nls","vscode-nls/vscode-nls","jsonc-parser","jsonc-parser/main","vscode-uri","vscode-uri/index","vs/basic-languages/typescript/typescript"]}),self.MonacoEnvironment={getWorker:function(e,t){return t==="json"?new Worker(F(ze)):t==="css"||t==="scss"||t==="less"?new Worker(F(qe)):t==="html"||t==="handlebars"||t==="razor"?new Worker(F(je)):t==="typescript"||t==="javascript"?new Worker(F(Ue)):new Worker(F(Be))}};function F(e){typeof e!="string"&&(e=e.toString());const t=new Blob([["const ttPolicy = globalThis.trustedTypes?.createPolicy('defaultWorkerFactory', { createScriptURL: value => value });","globalThis.workerttPolicy = ttPolicy;",`importScripts(ttPolicy?.createScriptURL(${JSON.stringify(e)}) ?? ${JSON.stringify(e)});`,"globalThis.postMessage({ type: 'vscode-worker-ready' });"].join("")],{type:"application/javascript"});return URL.createObjectURL(t)}globalThis.monaco=Jn;const Gn=We.toUrl("vs/editor/editor.main.css"),Q=document.createElement("link");Q.rel="stylesheet",Q.href=Gn,document.head.appendChild(Q),D.css=O.monaco_contribution,D.html=A.monaco_contribution,D.json=N.monaco_contribution,D.typescript=W.monaco_contribution,D.CancellationTokenSource=s.CancellationTokenSource,D.Emitter=s.Emitter,D.KeyCode=s.KeyCode,D.KeyMod=s.KeyMod,D.MarkerSeverity=s.MarkerSeverity,D.MarkerTag=s.MarkerTag,D.Position=s.Position,D.Range=s.Range,D.Selection=s.Selection,D.SelectionDirection=s.SelectionDirection,D.Token=s.Token,D.Uri=s.Uri,D.editor=s.editor,D.languages=s.languages,D.createWebWorker=Z.createWebWorker,D.lsp=Re,Object.defineProperty(D,Symbol.toStringTag,{value:"Module"})}));
+${JSON.stringify(response, null, 2)}`);
+        else return result.value;
+      }
+    }
+    async notify(notificationType, params, context) {
+      if (!this.checkChannel(this._requestSender)) throw new Error();
+      const encodedParams = notificationType.paramsSerializer.serializeToJson(params);
+      assertObjectArrayOrNull(encodedParams);
+      this._requestSender.sendNotification({
+        method: notificationType.method,
+        params: encodedParams
+      }, context);
+    }
+  };
+  function assertObjectArrayOrNull(val) {
+    if (val !== null && Array.isArray(val) && typeof val !== "object") throw new Error("Invalid value! Only null, array and object is allowed.");
+  }
+  var RequestHandlingError = class RequestHandlingError2 extends Error {
+    data;
+    code;
+    constructor(message, data, code = ErrorCode.genericApplicationError) {
+      super(message);
+      this.data = data;
+      this.code = code;
+      Object.setPrototypeOf(this, RequestHandlingError2.prototype);
+    }
+  };
+  var RequestType = class RequestType2 {
+    method;
+    paramsSerializer;
+    resultSerializer;
+    errorSerializer;
+    isOptional;
+    kind = "request";
+    constructor(method, paramsSerializer, resultSerializer, errorSerializer, isOptional = false) {
+      this.method = method;
+      this.paramsSerializer = paramsSerializer;
+      this.resultSerializer = resultSerializer;
+      this.errorSerializer = errorSerializer;
+      this.isOptional = isOptional;
+    }
+    withMethod(method) {
+      return new RequestType2(method, this.paramsSerializer, this.resultSerializer, this.errorSerializer);
+    }
+    optional() {
+      return new RequestType2(this.method, this.paramsSerializer, this.resultSerializer, this.errorSerializer, true);
+    }
+  };
+  var NotificationType = class NotificationType2 {
+    method;
+    paramsSerializer;
+    kind = "notification";
+    constructor(method, paramsSerializer) {
+      this.method = method;
+      this.paramsSerializer = paramsSerializer;
+    }
+    withMethod(method) {
+      return new NotificationType2(method, this.paramsSerializer);
+    }
+  };
+  function unverifiedRequest(request) {
+    return new RequestType((request || {}).method, Serializers.sAny(), Serializers.sAny(), Serializers.sAny());
+  }
+  function unverifiedNotification(request) {
+    return new NotificationType((request || {}).method, Serializers.sAny());
+  }
+  const IsErrorWrapper = Symbol();
+  var ErrorWrapper = class ErrorWrapper2 {
+    error;
+    static factory = (error) => {
+      return new ErrorWrapper2(error);
+    };
+    [IsErrorWrapper];
+    constructor(error) {
+      this.error = error;
+    }
+  };
+  function contract(contractObj) {
+    const server = transform(contractObj["server"]);
+    const client = transform(contractObj["client"]);
+    return new Contract(contractObj.tags || [], server, client);
+  }
+  function transform(requestMap) {
+    const result = {};
+    for (const [key, req] of Object.entries(requestMap)) {
+      const method = req.method ? req.method : key;
+      result[key] = req.withMethod(method);
+    }
+    return result;
+  }
+  var Contract = class Contract2 {
+    tags;
+    server;
+    client;
+    _onlyDesignTime() {
+      return /* @__PURE__ */ new Error("This property is not meant to be accessed at runtime");
+    }
+    get TContractObject() {
+      throw this._onlyDesignTime();
+    }
+    get TClientInterface() {
+      throw this._onlyDesignTime();
+    }
+    get TServerInterface() {
+      throw this._onlyDesignTime();
+    }
+    get TClientHandler() {
+      throw this._onlyDesignTime();
+    }
+    get TServerHandler() {
+      throw this._onlyDesignTime();
+    }
+    get TTags() {
+      throw this._onlyDesignTime();
+    }
+    constructor(tags = [], server, client) {
+      this.tags = tags;
+      this.server = server;
+      this.client = client;
+    }
+    getInterface(typedChannel, myContract, otherContract, myInterface) {
+      const counterpart = this.buildCounterpart(typedChannel, otherContract);
+      const disposable = this.registerHandlers(typedChannel, myContract, myInterface, counterpart);
+      return {
+        counterpart,
+        dispose: () => disposable.dispose()
+      };
+    }
+    buildCounterpart(typedChannel, otherContract) {
+      const counterpart = {};
+      for (const [key, req] of Object.entries(otherContract)) {
+        let method;
+        if (req.kind === "request") if (req.isOptional) method = async (args, context) => {
+          if (args === void 0) args = {};
+          try {
+            return await typedChannel.request(req, args, context);
+          } catch (error) {
+            if (error && error.code === ErrorCode.methodNotFound) return OptionalMethodNotFound;
+            throw error;
+          }
+        };
+        else method = (args, context) => {
+          if (args === void 0) args = {};
+          return typedChannel.request(req, args, context);
+        };
+        else method = (args, context) => {
+          if (args === void 0) args = {};
+          return typedChannel.notify(req, args, context);
+        };
+        counterpart[key] = method;
+      }
+      return counterpart;
+    }
+    registerHandlers(typedChannel, myContract, myInterface, counterpart) {
+      const disposables = [];
+      for (const [key, req] of Object.entries(myContract)) if (req.kind === "request") {
+        let method = myInterface[key];
+        if (!method) continue;
+        const handler = this.createRequestHandler(counterpart, method);
+        disposables.push(typedChannel.registerRequestHandler(req, handler));
+      } else {
+        const method = myInterface[key];
+        if (method) disposables.push(typedChannel.registerNotificationHandler(req, (args, context) => {
+          method(args, {
+            context,
+            counterpart
+          });
+        }));
+      }
+      return { dispose: () => disposables.forEach((d) => d.dispose()) };
+    }
+    createRequestHandler(counterpart, method) {
+      return async (args, requestId, listenerContext) => {
+        const result = await method(args, {
+          context: listenerContext,
+          counterpart,
+          newErr: ErrorWrapper.factory,
+          requestId
+        });
+        if (result instanceof ErrorWrapper) return result.error;
+        return { ok: result };
+      };
+    }
+    /**
+    * Gets a server object directly from a stream by constructing a new `TypedChannel`.
+    * It also registers the client implementation to the stream.
+    * The channel starts listening immediately.
+    */
+    static getServerFromStream(contract$1, stream, options, clientImplementation) {
+      const channel = TypedChannel.fromTransport(stream, options);
+      const { server } = contract$1.getServer(channel, clientImplementation);
+      channel.startListen();
+      return {
+        channel,
+        server
+      };
+    }
+    /**
+    * Gets a client object directly from a stream by constructing a new `TypedChannel`.
+    * It also registers the server implementation to the stream.
+    * The channel starts listening immediately.
+    */
+    static registerServerToStream(contract$1, stream, options, serverImplementation) {
+      const channel = TypedChannel.fromTransport(stream, options);
+      const { client } = contract$1.registerServer(channel, serverImplementation);
+      channel.startListen();
+      return {
+        channel,
+        client
+      };
+    }
+    getServer(typedChannel, clientImplementation) {
+      const { counterpart, dispose } = this.getInterface(typedChannel, this.client, this.server, clientImplementation);
+      return {
+        server: counterpart,
+        dispose
+      };
+    }
+    registerServer(typedChannel, serverImplementation) {
+      const { counterpart, dispose } = this.getInterface(typedChannel, this.server, this.client, serverImplementation);
+      return {
+        client: counterpart,
+        dispose
+      };
+    }
+    withContext() {
+      return new Contract2(this.tags, this.server, this.client);
+    }
+  };
+  let FoldingRangeKind = /* @__PURE__ */ (function(FoldingRangeKind$1) {
+    FoldingRangeKind$1["Comment"] = "comment";
+    FoldingRangeKind$1["Imports"] = "imports";
+    FoldingRangeKind$1["Region"] = "region";
+    return FoldingRangeKind$1;
+  })({});
+  let SymbolKind = /* @__PURE__ */ (function(SymbolKind$1) {
+    SymbolKind$1[SymbolKind$1["File"] = 1] = "File";
+    SymbolKind$1[SymbolKind$1["Module"] = 2] = "Module";
+    SymbolKind$1[SymbolKind$1["Namespace"] = 3] = "Namespace";
+    SymbolKind$1[SymbolKind$1["Package"] = 4] = "Package";
+    SymbolKind$1[SymbolKind$1["Class"] = 5] = "Class";
+    SymbolKind$1[SymbolKind$1["Method"] = 6] = "Method";
+    SymbolKind$1[SymbolKind$1["Property"] = 7] = "Property";
+    SymbolKind$1[SymbolKind$1["Field"] = 8] = "Field";
+    SymbolKind$1[SymbolKind$1["Constructor"] = 9] = "Constructor";
+    SymbolKind$1[SymbolKind$1["Enum"] = 10] = "Enum";
+    SymbolKind$1[SymbolKind$1["Interface"] = 11] = "Interface";
+    SymbolKind$1[SymbolKind$1["Function"] = 12] = "Function";
+    SymbolKind$1[SymbolKind$1["Variable"] = 13] = "Variable";
+    SymbolKind$1[SymbolKind$1["Constant"] = 14] = "Constant";
+    SymbolKind$1[SymbolKind$1["String"] = 15] = "String";
+    SymbolKind$1[SymbolKind$1["Number"] = 16] = "Number";
+    SymbolKind$1[SymbolKind$1["Boolean"] = 17] = "Boolean";
+    SymbolKind$1[SymbolKind$1["Array"] = 18] = "Array";
+    SymbolKind$1[SymbolKind$1["Object"] = 19] = "Object";
+    SymbolKind$1[SymbolKind$1["Key"] = 20] = "Key";
+    SymbolKind$1[SymbolKind$1["Null"] = 21] = "Null";
+    SymbolKind$1[SymbolKind$1["EnumMember"] = 22] = "EnumMember";
+    SymbolKind$1[SymbolKind$1["Struct"] = 23] = "Struct";
+    SymbolKind$1[SymbolKind$1["Event"] = 24] = "Event";
+    SymbolKind$1[SymbolKind$1["Operator"] = 25] = "Operator";
+    SymbolKind$1[SymbolKind$1["TypeParameter"] = 26] = "TypeParameter";
+    return SymbolKind$1;
+  })({});
+  let SymbolTag = /* @__PURE__ */ (function(SymbolTag$1) {
+    SymbolTag$1[SymbolTag$1["Deprecated"] = 1] = "Deprecated";
+    return SymbolTag$1;
+  })({});
+  let InlayHintKind = /* @__PURE__ */ (function(InlayHintKind$1) {
+    InlayHintKind$1[InlayHintKind$1["Type"] = 1] = "Type";
+    InlayHintKind$1[InlayHintKind$1["Parameter"] = 2] = "Parameter";
+    return InlayHintKind$1;
+  })({});
+  let TextDocumentSyncKind = /* @__PURE__ */ (function(TextDocumentSyncKind$1) {
+    TextDocumentSyncKind$1[TextDocumentSyncKind$1["None"] = 0] = "None";
+    TextDocumentSyncKind$1[TextDocumentSyncKind$1["Full"] = 1] = "Full";
+    TextDocumentSyncKind$1[TextDocumentSyncKind$1["Incremental"] = 2] = "Incremental";
+    return TextDocumentSyncKind$1;
+  })({});
+  let CompletionItemKind = /* @__PURE__ */ (function(CompletionItemKind$1) {
+    CompletionItemKind$1[CompletionItemKind$1["Text"] = 1] = "Text";
+    CompletionItemKind$1[CompletionItemKind$1["Method"] = 2] = "Method";
+    CompletionItemKind$1[CompletionItemKind$1["Function"] = 3] = "Function";
+    CompletionItemKind$1[CompletionItemKind$1["Constructor"] = 4] = "Constructor";
+    CompletionItemKind$1[CompletionItemKind$1["Field"] = 5] = "Field";
+    CompletionItemKind$1[CompletionItemKind$1["Variable"] = 6] = "Variable";
+    CompletionItemKind$1[CompletionItemKind$1["Class"] = 7] = "Class";
+    CompletionItemKind$1[CompletionItemKind$1["Interface"] = 8] = "Interface";
+    CompletionItemKind$1[CompletionItemKind$1["Module"] = 9] = "Module";
+    CompletionItemKind$1[CompletionItemKind$1["Property"] = 10] = "Property";
+    CompletionItemKind$1[CompletionItemKind$1["Unit"] = 11] = "Unit";
+    CompletionItemKind$1[CompletionItemKind$1["Value"] = 12] = "Value";
+    CompletionItemKind$1[CompletionItemKind$1["Enum"] = 13] = "Enum";
+    CompletionItemKind$1[CompletionItemKind$1["Keyword"] = 14] = "Keyword";
+    CompletionItemKind$1[CompletionItemKind$1["Snippet"] = 15] = "Snippet";
+    CompletionItemKind$1[CompletionItemKind$1["Color"] = 16] = "Color";
+    CompletionItemKind$1[CompletionItemKind$1["File"] = 17] = "File";
+    CompletionItemKind$1[CompletionItemKind$1["Reference"] = 18] = "Reference";
+    CompletionItemKind$1[CompletionItemKind$1["Folder"] = 19] = "Folder";
+    CompletionItemKind$1[CompletionItemKind$1["EnumMember"] = 20] = "EnumMember";
+    CompletionItemKind$1[CompletionItemKind$1["Constant"] = 21] = "Constant";
+    CompletionItemKind$1[CompletionItemKind$1["Struct"] = 22] = "Struct";
+    CompletionItemKind$1[CompletionItemKind$1["Event"] = 23] = "Event";
+    CompletionItemKind$1[CompletionItemKind$1["Operator"] = 24] = "Operator";
+    CompletionItemKind$1[CompletionItemKind$1["TypeParameter"] = 25] = "TypeParameter";
+    return CompletionItemKind$1;
+  })({});
+  let CompletionItemTag = /* @__PURE__ */ (function(CompletionItemTag$1) {
+    CompletionItemTag$1[CompletionItemTag$1["Deprecated"] = 1] = "Deprecated";
+    return CompletionItemTag$1;
+  })({});
+  let InsertTextFormat = /* @__PURE__ */ (function(InsertTextFormat$1) {
+    InsertTextFormat$1[InsertTextFormat$1["PlainText"] = 1] = "PlainText";
+    InsertTextFormat$1[InsertTextFormat$1["Snippet"] = 2] = "Snippet";
+    return InsertTextFormat$1;
+  })({});
+  let DocumentHighlightKind = /* @__PURE__ */ (function(DocumentHighlightKind$1) {
+    DocumentHighlightKind$1[DocumentHighlightKind$1["Text"] = 1] = "Text";
+    DocumentHighlightKind$1[DocumentHighlightKind$1["Read"] = 2] = "Read";
+    DocumentHighlightKind$1[DocumentHighlightKind$1["Write"] = 3] = "Write";
+    return DocumentHighlightKind$1;
+  })({});
+  let CodeActionKind = /* @__PURE__ */ (function(CodeActionKind$1) {
+    CodeActionKind$1["Empty"] = "";
+    CodeActionKind$1["QuickFix"] = "quickfix";
+    CodeActionKind$1["Refactor"] = "refactor";
+    CodeActionKind$1["RefactorExtract"] = "refactor.extract";
+    CodeActionKind$1["RefactorInline"] = "refactor.inline";
+    CodeActionKind$1["RefactorRewrite"] = "refactor.rewrite";
+    CodeActionKind$1["Source"] = "source";
+    CodeActionKind$1["SourceOrganizeImports"] = "source.organizeImports";
+    CodeActionKind$1["SourceFixAll"] = "source.fixAll";
+    return CodeActionKind$1;
+  })({});
+  let MarkupKind = /* @__PURE__ */ (function(MarkupKind$1) {
+    MarkupKind$1["PlainText"] = "plaintext";
+    MarkupKind$1["Markdown"] = "markdown";
+    return MarkupKind$1;
+  })({});
+  let DiagnosticSeverity = /* @__PURE__ */ (function(DiagnosticSeverity$1) {
+    DiagnosticSeverity$1[DiagnosticSeverity$1["Error"] = 1] = "Error";
+    DiagnosticSeverity$1[DiagnosticSeverity$1["Warning"] = 2] = "Warning";
+    DiagnosticSeverity$1[DiagnosticSeverity$1["Information"] = 3] = "Information";
+    DiagnosticSeverity$1[DiagnosticSeverity$1["Hint"] = 4] = "Hint";
+    return DiagnosticSeverity$1;
+  })({});
+  let DiagnosticTag = /* @__PURE__ */ (function(DiagnosticTag$1) {
+    DiagnosticTag$1[DiagnosticTag$1["Unnecessary"] = 1] = "Unnecessary";
+    DiagnosticTag$1[DiagnosticTag$1["Deprecated"] = 2] = "Deprecated";
+    return DiagnosticTag$1;
+  })({});
+  let CompletionTriggerKind = /* @__PURE__ */ (function(CompletionTriggerKind$1) {
+    CompletionTriggerKind$1[CompletionTriggerKind$1["Invoked"] = 1] = "Invoked";
+    CompletionTriggerKind$1[CompletionTriggerKind$1["TriggerCharacter"] = 2] = "TriggerCharacter";
+    CompletionTriggerKind$1[CompletionTriggerKind$1["TriggerForIncompleteCompletions"] = 3] = "TriggerForIncompleteCompletions";
+    return CompletionTriggerKind$1;
+  })({});
+  let SignatureHelpTriggerKind = /* @__PURE__ */ (function(SignatureHelpTriggerKind$1) {
+    SignatureHelpTriggerKind$1[SignatureHelpTriggerKind$1["Invoked"] = 1] = "Invoked";
+    SignatureHelpTriggerKind$1[SignatureHelpTriggerKind$1["TriggerCharacter"] = 2] = "TriggerCharacter";
+    SignatureHelpTriggerKind$1[SignatureHelpTriggerKind$1["ContentChange"] = 3] = "ContentChange";
+    return SignatureHelpTriggerKind$1;
+  })({});
+  let CodeActionTriggerKind = /* @__PURE__ */ (function(CodeActionTriggerKind$1) {
+    CodeActionTriggerKind$1[CodeActionTriggerKind$1["Invoked"] = 1] = "Invoked";
+    CodeActionTriggerKind$1[CodeActionTriggerKind$1["Automatic"] = 2] = "Automatic";
+    return CodeActionTriggerKind$1;
+  })({});
+  let TokenFormat = /* @__PURE__ */ (function(TokenFormat$1) {
+    TokenFormat$1["Relative"] = "relative";
+    return TokenFormat$1;
+  })({});
+  var Capability = class {
+    constructor(method) {
+      this.method = method;
+    }
+  };
+  const capabilities = {
+    textDocumentImplementation: new Capability("textDocument/implementation"),
+    textDocumentTypeDefinition: new Capability("textDocument/typeDefinition"),
+    textDocumentDocumentColor: new Capability("textDocument/documentColor"),
+    textDocumentColorPresentation: new Capability("textDocument/colorPresentation"),
+    textDocumentFoldingRange: new Capability("textDocument/foldingRange"),
+    textDocumentDeclaration: new Capability("textDocument/declaration"),
+    textDocumentSelectionRange: new Capability("textDocument/selectionRange"),
+    textDocumentPrepareCallHierarchy: new Capability("textDocument/prepareCallHierarchy"),
+    textDocumentSemanticTokensFull: new Capability("textDocument/semanticTokens/full"),
+    textDocumentSemanticTokensFullDelta: new Capability("textDocument/semanticTokens/full/delta"),
+    textDocumentLinkedEditingRange: new Capability("textDocument/linkedEditingRange"),
+    workspaceWillCreateFiles: new Capability("workspace/willCreateFiles"),
+    workspaceWillRenameFiles: new Capability("workspace/willRenameFiles"),
+    workspaceWillDeleteFiles: new Capability("workspace/willDeleteFiles"),
+    textDocumentMoniker: new Capability("textDocument/moniker"),
+    textDocumentPrepareTypeHierarchy: new Capability("textDocument/prepareTypeHierarchy"),
+    textDocumentInlineValue: new Capability("textDocument/inlineValue"),
+    textDocumentInlayHint: new Capability("textDocument/inlayHint"),
+    textDocumentDiagnostic: new Capability("textDocument/diagnostic"),
+    textDocumentInlineCompletion: new Capability("textDocument/inlineCompletion"),
+    textDocumentWillSaveWaitUntil: new Capability("textDocument/willSaveWaitUntil"),
+    textDocumentCompletion: new Capability("textDocument/completion"),
+    textDocumentHover: new Capability("textDocument/hover"),
+    textDocumentSignatureHelp: new Capability("textDocument/signatureHelp"),
+    textDocumentDefinition: new Capability("textDocument/definition"),
+    textDocumentReferences: new Capability("textDocument/references"),
+    textDocumentDocumentHighlight: new Capability("textDocument/documentHighlight"),
+    textDocumentDocumentSymbol: new Capability("textDocument/documentSymbol"),
+    textDocumentCodeAction: new Capability("textDocument/codeAction"),
+    workspaceSymbol: new Capability("workspace/symbol"),
+    textDocumentCodeLens: new Capability("textDocument/codeLens"),
+    textDocumentDocumentLink: new Capability("textDocument/documentLink"),
+    textDocumentFormatting: new Capability("textDocument/formatting"),
+    textDocumentRangeFormatting: new Capability("textDocument/rangeFormatting"),
+    textDocumentRangesFormatting: new Capability("textDocument/rangesFormatting"),
+    textDocumentOnTypeFormatting: new Capability("textDocument/onTypeFormatting"),
+    textDocumentRename: new Capability("textDocument/rename"),
+    workspaceExecuteCommand: new Capability("workspace/executeCommand"),
+    workspaceDidCreateFiles: new Capability("workspace/didCreateFiles"),
+    workspaceDidRenameFiles: new Capability("workspace/didRenameFiles"),
+    workspaceDidDeleteFiles: new Capability("workspace/didDeleteFiles"),
+    workspaceDidChangeConfiguration: new Capability("workspace/didChangeConfiguration"),
+    textDocumentDidOpen: new Capability("textDocument/didOpen"),
+    textDocumentDidChange: new Capability("textDocument/didChange"),
+    textDocumentDidClose: new Capability("textDocument/didClose"),
+    textDocumentDidSave: new Capability("textDocument/didSave"),
+    textDocumentWillSave: new Capability("textDocument/willSave"),
+    workspaceDidChangeWatchedFiles: new Capability("workspace/didChangeWatchedFiles")
+  };
+  const api = contract({
+    server: {
+      textDocumentImplementation: unverifiedRequest({ method: "textDocument/implementation" }),
+      textDocumentTypeDefinition: unverifiedRequest({ method: "textDocument/typeDefinition" }),
+      textDocumentDocumentColor: unverifiedRequest({ method: "textDocument/documentColor" }),
+      textDocumentColorPresentation: unverifiedRequest({ method: "textDocument/colorPresentation" }),
+      textDocumentFoldingRange: unverifiedRequest({ method: "textDocument/foldingRange" }),
+      textDocumentDeclaration: unverifiedRequest({ method: "textDocument/declaration" }),
+      textDocumentSelectionRange: unverifiedRequest({ method: "textDocument/selectionRange" }),
+      textDocumentPrepareCallHierarchy: unverifiedRequest({ method: "textDocument/prepareCallHierarchy" }),
+      callHierarchyIncomingCalls: unverifiedRequest({ method: "callHierarchy/incomingCalls" }),
+      callHierarchyOutgoingCalls: unverifiedRequest({ method: "callHierarchy/outgoingCalls" }),
+      textDocumentSemanticTokensFull: unverifiedRequest({ method: "textDocument/semanticTokens/full" }),
+      textDocumentSemanticTokensFullDelta: unverifiedRequest({ method: "textDocument/semanticTokens/full/delta" }),
+      textDocumentSemanticTokensRange: unverifiedRequest({ method: "textDocument/semanticTokens/range" }),
+      textDocumentLinkedEditingRange: unverifiedRequest({ method: "textDocument/linkedEditingRange" }),
+      workspaceWillCreateFiles: unverifiedRequest({ method: "workspace/willCreateFiles" }),
+      workspaceWillRenameFiles: unverifiedRequest({ method: "workspace/willRenameFiles" }),
+      workspaceWillDeleteFiles: unverifiedRequest({ method: "workspace/willDeleteFiles" }),
+      textDocumentMoniker: unverifiedRequest({ method: "textDocument/moniker" }),
+      textDocumentPrepareTypeHierarchy: unverifiedRequest({ method: "textDocument/prepareTypeHierarchy" }),
+      typeHierarchySupertypes: unverifiedRequest({ method: "typeHierarchy/supertypes" }),
+      typeHierarchySubtypes: unverifiedRequest({ method: "typeHierarchy/subtypes" }),
+      textDocumentInlineValue: unverifiedRequest({ method: "textDocument/inlineValue" }),
+      textDocumentInlayHint: unverifiedRequest({ method: "textDocument/inlayHint" }),
+      inlayHintResolve: unverifiedRequest({ method: "inlayHint/resolve" }),
+      textDocumentDiagnostic: unverifiedRequest({ method: "textDocument/diagnostic" }),
+      workspaceDiagnostic: unverifiedRequest({ method: "workspace/diagnostic" }),
+      textDocumentInlineCompletion: unverifiedRequest({ method: "textDocument/inlineCompletion" }),
+      initialize: unverifiedRequest({ method: "initialize" }),
+      shutdown: unverifiedRequest({ method: "shutdown" }),
+      textDocumentWillSaveWaitUntil: unverifiedRequest({ method: "textDocument/willSaveWaitUntil" }),
+      textDocumentCompletion: unverifiedRequest({ method: "textDocument/completion" }),
+      completionItemResolve: unverifiedRequest({ method: "completionItem/resolve" }),
+      textDocumentHover: unverifiedRequest({ method: "textDocument/hover" }),
+      textDocumentSignatureHelp: unverifiedRequest({ method: "textDocument/signatureHelp" }),
+      textDocumentDefinition: unverifiedRequest({ method: "textDocument/definition" }),
+      textDocumentReferences: unverifiedRequest({ method: "textDocument/references" }),
+      textDocumentDocumentHighlight: unverifiedRequest({ method: "textDocument/documentHighlight" }),
+      textDocumentDocumentSymbol: unverifiedRequest({ method: "textDocument/documentSymbol" }),
+      textDocumentCodeAction: unverifiedRequest({ method: "textDocument/codeAction" }),
+      codeActionResolve: unverifiedRequest({ method: "codeAction/resolve" }),
+      workspaceSymbol: unverifiedRequest({ method: "workspace/symbol" }),
+      workspaceSymbolResolve: unverifiedRequest({ method: "workspaceSymbol/resolve" }),
+      textDocumentCodeLens: unverifiedRequest({ method: "textDocument/codeLens" }),
+      codeLensResolve: unverifiedRequest({ method: "codeLens/resolve" }),
+      textDocumentDocumentLink: unverifiedRequest({ method: "textDocument/documentLink" }),
+      documentLinkResolve: unverifiedRequest({ method: "documentLink/resolve" }),
+      textDocumentFormatting: unverifiedRequest({ method: "textDocument/formatting" }),
+      textDocumentRangeFormatting: unverifiedRequest({ method: "textDocument/rangeFormatting" }),
+      textDocumentRangesFormatting: unverifiedRequest({ method: "textDocument/rangesFormatting" }),
+      textDocumentOnTypeFormatting: unverifiedRequest({ method: "textDocument/onTypeFormatting" }),
+      textDocumentRename: unverifiedRequest({ method: "textDocument/rename" }),
+      textDocumentPrepareRename: unverifiedRequest({ method: "textDocument/prepareRename" }),
+      workspaceExecuteCommand: unverifiedRequest({ method: "workspace/executeCommand" }),
+      workspaceDidChangeWorkspaceFolders: unverifiedNotification({ method: "workspace/didChangeWorkspaceFolders" }),
+      windowWorkDoneProgressCancel: unverifiedNotification({ method: "window/workDoneProgress/cancel" }),
+      workspaceDidCreateFiles: unverifiedNotification({ method: "workspace/didCreateFiles" }),
+      workspaceDidRenameFiles: unverifiedNotification({ method: "workspace/didRenameFiles" }),
+      workspaceDidDeleteFiles: unverifiedNotification({ method: "workspace/didDeleteFiles" }),
+      notebookDocumentDidOpen: unverifiedNotification({ method: "notebookDocument/didOpen" }),
+      notebookDocumentDidChange: unverifiedNotification({ method: "notebookDocument/didChange" }),
+      notebookDocumentDidSave: unverifiedNotification({ method: "notebookDocument/didSave" }),
+      notebookDocumentDidClose: unverifiedNotification({ method: "notebookDocument/didClose" }),
+      initialized: unverifiedNotification({ method: "initialized" }),
+      exit: unverifiedNotification({ method: "exit" }),
+      workspaceDidChangeConfiguration: unverifiedNotification({ method: "workspace/didChangeConfiguration" }),
+      textDocumentDidOpen: unverifiedNotification({ method: "textDocument/didOpen" }),
+      textDocumentDidChange: unverifiedNotification({ method: "textDocument/didChange" }),
+      textDocumentDidClose: unverifiedNotification({ method: "textDocument/didClose" }),
+      textDocumentDidSave: unverifiedNotification({ method: "textDocument/didSave" }),
+      textDocumentWillSave: unverifiedNotification({ method: "textDocument/willSave" }),
+      workspaceDidChangeWatchedFiles: unverifiedNotification({ method: "workspace/didChangeWatchedFiles" }),
+      setTrace: unverifiedNotification({ method: "$/setTrace" }),
+      cancelRequest: unverifiedNotification({ method: "$/cancelRequest" }),
+      progress: unverifiedNotification({ method: "$/progress" })
+    },
+    client: {
+      workspaceWorkspaceFolders: unverifiedRequest({ method: "workspace/workspaceFolders" }).optional(),
+      workspaceConfiguration: unverifiedRequest({ method: "workspace/configuration" }).optional(),
+      workspaceFoldingRangeRefresh: unverifiedRequest({ method: "workspace/foldingRange/refresh" }).optional(),
+      windowWorkDoneProgressCreate: unverifiedRequest({ method: "window/workDoneProgress/create" }).optional(),
+      workspaceSemanticTokensRefresh: unverifiedRequest({ method: "workspace/semanticTokens/refresh" }).optional(),
+      windowShowDocument: unverifiedRequest({ method: "window/showDocument" }).optional(),
+      workspaceInlineValueRefresh: unverifiedRequest({ method: "workspace/inlineValue/refresh" }).optional(),
+      workspaceInlayHintRefresh: unverifiedRequest({ method: "workspace/inlayHint/refresh" }).optional(),
+      workspaceDiagnosticRefresh: unverifiedRequest({ method: "workspace/diagnostic/refresh" }).optional(),
+      clientRegisterCapability: unverifiedRequest({ method: "client/registerCapability" }).optional(),
+      clientUnregisterCapability: unverifiedRequest({ method: "client/unregisterCapability" }).optional(),
+      windowShowMessageRequest: unverifiedRequest({ method: "window/showMessageRequest" }).optional(),
+      workspaceCodeLensRefresh: unverifiedRequest({ method: "workspace/codeLens/refresh" }).optional(),
+      workspaceApplyEdit: unverifiedRequest({ method: "workspace/applyEdit" }).optional(),
+      windowShowMessage: unverifiedNotification({ method: "window/showMessage" }),
+      windowLogMessage: unverifiedNotification({ method: "window/logMessage" }),
+      telemetryEvent: unverifiedNotification({ method: "telemetry/event" }),
+      textDocumentPublishDiagnostics: unverifiedNotification({ method: "textDocument/publishDiagnostics" }),
+      logTrace: unverifiedNotification({ method: "$/logTrace" }),
+      cancelRequest: unverifiedNotification({ method: "$/cancelRequest" }),
+      progress: unverifiedNotification({ method: "$/progress" })
+    }
+  });
+  function assertTargetTextModel(input, expectedTextModel) {
+    if (input.textModel !== expectedTextModel) throw new Error(`Expected text model to be ${expectedTextModel}, but got ${input.textModel}`);
+    return input;
+  }
+  var Disposable = class {
+    static None = Object.freeze({ dispose() {
+    } });
+    _store = new DisposableStore();
+    constructor() {
+    }
+    dispose() {
+      this._store.dispose();
+    }
+    _register(t) {
+      if (t === this) throw new Error("Cannot register a disposable on itself!");
+      return this._store.add(t);
+    }
+  };
+  var DisposableStore = class DisposableStore {
+    static DISABLE_DISPOSED_WARNING = false;
+    _toDispose = /* @__PURE__ */ new Set();
+    _isDisposed = false;
+    dispose() {
+      if (this._isDisposed) return;
+      this._isDisposed = true;
+      this.clear();
+    }
+    clear() {
+      if (this._toDispose.size === 0) return;
+      try {
+        for (const item of this._toDispose) item.dispose();
+      } finally {
+        this._toDispose.clear();
+      }
+    }
+    add(t) {
+      if (!t) return t;
+      if (t === this) throw new Error("Cannot register a disposable on itself!");
+      if (this._isDisposed) {
+        console.warn((/* @__PURE__ */ new Error("Trying to add a disposable to a DisposableStore that has already been disposed of. The added object will be leaked!")).stack);
+      } else this._toDispose.add(t);
+      return t;
+    }
+  };
+  const lspCodeActionKindToMonacoCodeActionKind = /* @__PURE__ */ new Map([
+    [CodeActionKind.Empty, ""],
+    [CodeActionKind.QuickFix, "quickfix"],
+    [CodeActionKind.Refactor, "refactor"],
+    [CodeActionKind.RefactorExtract, "refactor.extract"],
+    [CodeActionKind.RefactorInline, "refactor.inline"],
+    [CodeActionKind.RefactorRewrite, "refactor.rewrite"],
+    [CodeActionKind.Source, "source"],
+    [CodeActionKind.SourceOrganizeImports, "source.organizeImports"],
+    [CodeActionKind.SourceFixAll, "source.fixAll"]
+  ]);
+  function toMonacoCodeActionKind(kind) {
+    if (!kind) return;
+    return lspCodeActionKindToMonacoCodeActionKind.get(kind) ?? kind;
+  }
+  const monacoCodeActionTriggerTypeToLspCodeActionTriggerKind = /* @__PURE__ */ new Map([[editor_api.languages.CodeActionTriggerType.Invoke, CodeActionTriggerKind.Invoked], [editor_api.languages.CodeActionTriggerType.Auto, CodeActionTriggerKind.Automatic]]);
+  function toLspCodeActionTriggerKind(monacoTrigger) {
+    return monacoCodeActionTriggerTypeToLspCodeActionTriggerKind.get(monacoTrigger) ?? CodeActionTriggerKind.Invoked;
+  }
+  const lspCompletionItemKindToMonacoCompletionItemKind = /* @__PURE__ */ new Map([
+    [CompletionItemKind.Text, editor_api.languages.CompletionItemKind.Text],
+    [CompletionItemKind.Method, editor_api.languages.CompletionItemKind.Method],
+    [CompletionItemKind.Function, editor_api.languages.CompletionItemKind.Function],
+    [CompletionItemKind.Constructor, editor_api.languages.CompletionItemKind.Constructor],
+    [CompletionItemKind.Field, editor_api.languages.CompletionItemKind.Field],
+    [CompletionItemKind.Variable, editor_api.languages.CompletionItemKind.Variable],
+    [CompletionItemKind.Class, editor_api.languages.CompletionItemKind.Class],
+    [CompletionItemKind.Interface, editor_api.languages.CompletionItemKind.Interface],
+    [CompletionItemKind.Module, editor_api.languages.CompletionItemKind.Module],
+    [CompletionItemKind.Property, editor_api.languages.CompletionItemKind.Property],
+    [CompletionItemKind.Unit, editor_api.languages.CompletionItemKind.Unit],
+    [CompletionItemKind.Value, editor_api.languages.CompletionItemKind.Value],
+    [CompletionItemKind.Enum, editor_api.languages.CompletionItemKind.Enum],
+    [CompletionItemKind.Keyword, editor_api.languages.CompletionItemKind.Keyword],
+    [CompletionItemKind.Snippet, editor_api.languages.CompletionItemKind.Snippet],
+    [CompletionItemKind.Color, editor_api.languages.CompletionItemKind.Color],
+    [CompletionItemKind.File, editor_api.languages.CompletionItemKind.File],
+    [CompletionItemKind.Reference, editor_api.languages.CompletionItemKind.Reference],
+    [CompletionItemKind.Folder, editor_api.languages.CompletionItemKind.Folder],
+    [CompletionItemKind.EnumMember, editor_api.languages.CompletionItemKind.EnumMember],
+    [CompletionItemKind.Constant, editor_api.languages.CompletionItemKind.Constant],
+    [CompletionItemKind.Struct, editor_api.languages.CompletionItemKind.Struct],
+    [CompletionItemKind.Event, editor_api.languages.CompletionItemKind.Event],
+    [CompletionItemKind.Operator, editor_api.languages.CompletionItemKind.Operator],
+    [CompletionItemKind.TypeParameter, editor_api.languages.CompletionItemKind.TypeParameter]
+  ]);
+  function toMonacoCompletionItemKind(kind) {
+    if (!kind) return editor_api.languages.CompletionItemKind.Text;
+    return lspCompletionItemKindToMonacoCompletionItemKind.get(kind) ?? editor_api.languages.CompletionItemKind.Text;
+  }
+  const lspCompletionItemTagToMonacoCompletionItemTag = /* @__PURE__ */ new Map([[CompletionItemTag.Deprecated, editor_api.languages.CompletionItemTag.Deprecated]]);
+  function toMonacoCompletionItemTag(tag) {
+    return lspCompletionItemTagToMonacoCompletionItemTag.get(tag);
+  }
+  const monacoCompletionTriggerKindToLspCompletionTriggerKind = /* @__PURE__ */ new Map([
+    [editor_api.languages.CompletionTriggerKind.Invoke, CompletionTriggerKind.Invoked],
+    [editor_api.languages.CompletionTriggerKind.TriggerCharacter, CompletionTriggerKind.TriggerCharacter],
+    [editor_api.languages.CompletionTriggerKind.TriggerForIncompleteCompletions, CompletionTriggerKind.TriggerForIncompleteCompletions]
+  ]);
+  function toLspCompletionTriggerKind(monacoKind) {
+    return monacoCompletionTriggerKindToLspCompletionTriggerKind.get(monacoKind) ?? CompletionTriggerKind.Invoked;
+  }
+  const lspInsertTextFormatToMonacoInsertTextRules = /* @__PURE__ */ new Map([[InsertTextFormat.Snippet, editor_api.languages.CompletionItemInsertTextRule.InsertAsSnippet]]);
+  function toMonacoInsertTextRules(format) {
+    if (!format) return;
+    return lspInsertTextFormatToMonacoInsertTextRules.get(format);
+  }
+  const lspSymbolKindToMonacoSymbolKind = /* @__PURE__ */ new Map([
+    [SymbolKind.File, editor_api.languages.SymbolKind.File],
+    [SymbolKind.Module, editor_api.languages.SymbolKind.Module],
+    [SymbolKind.Namespace, editor_api.languages.SymbolKind.Namespace],
+    [SymbolKind.Package, editor_api.languages.SymbolKind.Package],
+    [SymbolKind.Class, editor_api.languages.SymbolKind.Class],
+    [SymbolKind.Method, editor_api.languages.SymbolKind.Method],
+    [SymbolKind.Property, editor_api.languages.SymbolKind.Property],
+    [SymbolKind.Field, editor_api.languages.SymbolKind.Field],
+    [SymbolKind.Constructor, editor_api.languages.SymbolKind.Constructor],
+    [SymbolKind.Enum, editor_api.languages.SymbolKind.Enum],
+    [SymbolKind.Interface, editor_api.languages.SymbolKind.Interface],
+    [SymbolKind.Function, editor_api.languages.SymbolKind.Function],
+    [SymbolKind.Variable, editor_api.languages.SymbolKind.Variable],
+    [SymbolKind.Constant, editor_api.languages.SymbolKind.Constant],
+    [SymbolKind.String, editor_api.languages.SymbolKind.String],
+    [SymbolKind.Number, editor_api.languages.SymbolKind.Number],
+    [SymbolKind.Boolean, editor_api.languages.SymbolKind.Boolean],
+    [SymbolKind.Array, editor_api.languages.SymbolKind.Array],
+    [SymbolKind.Object, editor_api.languages.SymbolKind.Object],
+    [SymbolKind.Key, editor_api.languages.SymbolKind.Key],
+    [SymbolKind.Null, editor_api.languages.SymbolKind.Null],
+    [SymbolKind.EnumMember, editor_api.languages.SymbolKind.EnumMember],
+    [SymbolKind.Struct, editor_api.languages.SymbolKind.Struct],
+    [SymbolKind.Event, editor_api.languages.SymbolKind.Event],
+    [SymbolKind.Operator, editor_api.languages.SymbolKind.Operator],
+    [SymbolKind.TypeParameter, editor_api.languages.SymbolKind.TypeParameter]
+  ]);
+  function toMonacoSymbolKind(kind) {
+    return lspSymbolKindToMonacoSymbolKind.get(kind) ?? editor_api.languages.SymbolKind.File;
+  }
+  const lspSymbolTagToMonacoSymbolTag = /* @__PURE__ */ new Map([[SymbolTag.Deprecated, editor_api.languages.SymbolTag.Deprecated]]);
+  function toMonacoSymbolTag(tag) {
+    return lspSymbolTagToMonacoSymbolTag.get(tag);
+  }
+  const lspDocumentHighlightKindToMonacoDocumentHighlightKind = /* @__PURE__ */ new Map([
+    [DocumentHighlightKind.Text, editor_api.languages.DocumentHighlightKind.Text],
+    [DocumentHighlightKind.Read, editor_api.languages.DocumentHighlightKind.Read],
+    [DocumentHighlightKind.Write, editor_api.languages.DocumentHighlightKind.Write]
+  ]);
+  function toMonacoDocumentHighlightKind(kind) {
+    if (!kind) return editor_api.languages.DocumentHighlightKind.Text;
+    return lspDocumentHighlightKindToMonacoDocumentHighlightKind.get(kind) ?? editor_api.languages.DocumentHighlightKind.Text;
+  }
+  const lspFoldingRangeKindToMonacoFoldingRangeKind = /* @__PURE__ */ new Map([
+    [FoldingRangeKind.Comment, editor_api.languages.FoldingRangeKind.Comment],
+    [FoldingRangeKind.Imports, editor_api.languages.FoldingRangeKind.Imports],
+    [FoldingRangeKind.Region, editor_api.languages.FoldingRangeKind.Region]
+  ]);
+  function toMonacoFoldingRangeKind(kind) {
+    if (!kind) return;
+    return lspFoldingRangeKindToMonacoFoldingRangeKind.get(kind);
+  }
+  const monacoMarkerSeverityToLspDiagnosticSeverity = /* @__PURE__ */ new Map([
+    [editor_api.MarkerSeverity.Error, DiagnosticSeverity.Error],
+    [editor_api.MarkerSeverity.Warning, DiagnosticSeverity.Warning],
+    [editor_api.MarkerSeverity.Info, DiagnosticSeverity.Information],
+    [editor_api.MarkerSeverity.Hint, DiagnosticSeverity.Hint]
+  ]);
+  function toLspDiagnosticSeverity(severity) {
+    return monacoMarkerSeverityToLspDiagnosticSeverity.get(severity) ?? DiagnosticSeverity.Error;
+  }
+  const lspDiagnosticSeverityToMonacoMarkerSeverity = /* @__PURE__ */ new Map([
+    [DiagnosticSeverity.Error, editor_api.MarkerSeverity.Error],
+    [DiagnosticSeverity.Warning, editor_api.MarkerSeverity.Warning],
+    [DiagnosticSeverity.Information, editor_api.MarkerSeverity.Info],
+    [DiagnosticSeverity.Hint, editor_api.MarkerSeverity.Hint]
+  ]);
+  function toMonacoDiagnosticSeverity(severity) {
+    if (!severity) return editor_api.MarkerSeverity.Error;
+    return lspDiagnosticSeverityToMonacoMarkerSeverity.get(severity) ?? editor_api.MarkerSeverity.Error;
+  }
+  const lspDiagnosticTagToMonacoMarkerTag = /* @__PURE__ */ new Map([[DiagnosticTag.Unnecessary, editor_api.MarkerTag.Unnecessary], [DiagnosticTag.Deprecated, editor_api.MarkerTag.Deprecated]]);
+  function toMonacoDiagnosticTag(tag) {
+    return lspDiagnosticTagToMonacoMarkerTag.get(tag);
+  }
+  const monacoSignatureHelpTriggerKindToLspSignatureHelpTriggerKind = /* @__PURE__ */ new Map([
+    [editor_api.languages.SignatureHelpTriggerKind.Invoke, SignatureHelpTriggerKind.Invoked],
+    [editor_api.languages.SignatureHelpTriggerKind.TriggerCharacter, SignatureHelpTriggerKind.TriggerCharacter],
+    [editor_api.languages.SignatureHelpTriggerKind.ContentChange, SignatureHelpTriggerKind.ContentChange]
+  ]);
+  function toLspSignatureHelpTriggerKind(monacoKind) {
+    return monacoSignatureHelpTriggerKindToLspSignatureHelpTriggerKind.get(monacoKind) ?? SignatureHelpTriggerKind.Invoked;
+  }
+  function toMonacoCommand(command) {
+    if (!command) return;
+    return {
+      id: command.command,
+      title: command.title,
+      arguments: command.arguments
+    };
+  }
+  const lspInlayHintKindToMonacoInlayHintKind = /* @__PURE__ */ new Map([[InlayHintKind.Type, editor_api.languages.InlayHintKind.Type], [InlayHintKind.Parameter, editor_api.languages.InlayHintKind.Parameter]]);
+  function toMonacoInlayHintKind(kind) {
+    if (!kind) return editor_api.languages.InlayHintKind.Type;
+    return lspInlayHintKindToMonacoInlayHintKind.get(kind) ?? editor_api.languages.InlayHintKind.Type;
+  }
+  function toMonacoLocation(location, client) {
+    if ("targetUri" in location) {
+      const translatedRange = client.bridge.translateBackRange({ uri: location.targetUri }, location.targetRange);
+      return {
+        uri: translatedRange.textModel.uri,
+        range: translatedRange.range,
+        originSelectionRange: location.originSelectionRange ? client.bridge.translateBackRange({ uri: location.targetUri }, location.originSelectionRange).range : void 0,
+        targetSelectionRange: location.targetSelectionRange ? client.bridge.translateBackRange({ uri: location.targetUri }, location.targetSelectionRange).range : void 0
+      };
+    } else {
+      const translatedRange = client.bridge.translateBackRange({ uri: location.uri }, location.range);
+      return {
+        uri: translatedRange.textModel.uri,
+        range: translatedRange.range
+      };
+    }
+  }
+  function toMonacoLanguageSelector(s) {
+    if (!s || s.length === 0) return { language: "*" };
+    return s.map((s$1) => {
+      if ("notebook" in s$1) if (typeof s$1.notebook === "string") return {
+        notebookType: s$1.notebook,
+        language: s$1.language
+      };
+      else return {
+        notebookType: s$1.notebook.notebookType,
+        language: s$1.language,
+        pattern: s$1.notebook.pattern,
+        scheme: s$1.notebook.scheme
+      };
+      else return {
+        language: s$1.language,
+        pattern: s$1.pattern,
+        scheme: s$1.scheme
+      };
+    });
+  }
+  function matchesDocumentSelector(model, selector) {
+    if (!selector) return true;
+    const languageId = model.getLanguageId();
+    model.uri.toString(true);
+    if (!selector || selector.length === 0) return true;
+    for (const filter of selector) {
+      if (filter.language && filter.language !== "*" && filter.language !== languageId) continue;
+      return true;
+    }
+    return false;
+  }
+  function toDiagnosticMarker(diagnostic) {
+    const marker = {
+      severity: toMonacoDiagnosticSeverity(diagnostic.severity),
+      startLineNumber: diagnostic.range.start.line + 1,
+      startColumn: diagnostic.range.start.character + 1,
+      endLineNumber: diagnostic.range.end.line + 1,
+      endColumn: diagnostic.range.end.character + 1,
+      message: diagnostic.message,
+      source: diagnostic.source,
+      code: typeof diagnostic.code === "string" ? diagnostic.code : diagnostic.code?.toString()
+    };
+    if (diagnostic.tags) marker.tags = diagnostic.tags.map((tag) => toMonacoDiagnosticTag(tag)).filter((tag) => tag !== void 0);
+    if (diagnostic.relatedInformation) marker.relatedInformation = diagnostic.relatedInformation.map((info) => ({
+      resource: editor_api.Uri.parse(info.location.uri),
+      startLineNumber: info.location.range.start.line + 1,
+      startColumn: info.location.range.start.character + 1,
+      endLineNumber: info.location.range.end.line + 1,
+      endColumn: info.location.range.end.character + 1,
+      message: info.message
+    }));
+    return marker;
+  }
+  var LspCompletionFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { completion: {
+        dynamicRegistration: true,
+        contextSupport: true,
+        completionItemKind: { valueSet: Array.from(lspCompletionItemKindToMonacoCompletionItemKind.keys()) },
+        completionItem: {
+          tagSupport: { valueSet: Array.from(lspCompletionItemTagToMonacoCompletionItemTag.keys()) },
+          commitCharactersSupport: true,
+          deprecatedSupport: true,
+          preselectSupport: true
+        }
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentCompletion, true, (capability) => {
+        return editor_api.languages.registerCompletionItemProvider(toMonacoLanguageSelector(capability.documentSelector), new LspCompletionProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspCompletionProvider = class {
+    resolveCompletionItem;
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+      if (_capabilities.resolveProvider) this.resolveCompletionItem = async (item, token) => {
+        applyLspCompletionItemProperties(item, await this._client.server.completionItemResolve(item._lspItem), this._client.bridge, item._translated, item._model);
+        return item;
+      };
+    }
+    get triggerCharacters() {
+      return this._capabilities.triggerCharacters;
+    }
+    async provideCompletionItems(model, position, context, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentCompletion({
+        textDocument: translated.textDocument,
+        position: translated.position,
+        context: context.triggerCharacter ? {
+          triggerKind: toLspCompletionTriggerKind(context.triggerKind),
+          triggerCharacter: context.triggerCharacter
+        } : void 0
+      });
+      if (!result) return { suggestions: [] };
+      return { suggestions: (Array.isArray(result) ? result : result.items).map((i) => {
+        return {
+          ...convertLspToMonacoCompletionItem(i, this._client.bridge, translated, model, position),
+          _lspItem: i,
+          _translated: translated,
+          _model: model
+        };
+      }) };
+    }
+  };
+  function convertLspToMonacoCompletionItem(lspItem, bridge, translated, model, position) {
+    let insertText = lspItem.insertText || lspItem.label;
+    let range = void 0;
+    if (lspItem.textEdit) if ("range" in lspItem.textEdit) {
+      insertText = lspItem.textEdit.newText;
+      range = assertTargetTextModel(bridge.translateBackRange(translated.textDocument, lspItem.textEdit.range), model).range;
+    } else {
+      insertText = lspItem.textEdit.newText;
+      range = {
+        insert: assertTargetTextModel(bridge.translateBackRange(translated.textDocument, lspItem.textEdit.insert), model).range,
+        replace: assertTargetTextModel(bridge.translateBackRange(translated.textDocument, lspItem.textEdit.replace), model).range
+      };
+    }
+    if (!range) range = editor_api.Range.fromPositions(position, position);
+    const item = {
+      label: lspItem.label,
+      kind: toMonacoCompletionItemKind(lspItem.kind),
+      insertText,
+      sortText: lspItem.sortText,
+      filterText: lspItem.filterText,
+      preselect: lspItem.preselect,
+      commitCharacters: lspItem.commitCharacters,
+      range
+    };
+    applyLspCompletionItemProperties(item, lspItem, bridge, translated, model);
+    return item;
+  }
+  function applyLspCompletionItemProperties(monacoItem, lspItem, bridge, translated, targetModel) {
+    if (lspItem.detail !== void 0) monacoItem.detail = lspItem.detail;
+    if (lspItem.documentation !== void 0) monacoItem.documentation = toMonacoDocumentation$1(lspItem.documentation);
+    if (lspItem.insertTextFormat !== void 0) monacoItem.insertTextRules = toMonacoInsertTextRules(lspItem.insertTextFormat);
+    if (lspItem.tags && lspItem.tags.length > 0) monacoItem.tags = lspItem.tags.map(toMonacoCompletionItemTag).filter((tag) => tag !== void 0);
+    if (lspItem.additionalTextEdits && lspItem.additionalTextEdits.length > 0) monacoItem.additionalTextEdits = lspItem.additionalTextEdits.map((edit) => ({
+      range: assertTargetTextModel(bridge.translateBackRange(translated.textDocument, edit.range), targetModel).range,
+      text: edit.newText
+    }));
+    if (lspItem.command) monacoItem.command = toMonacoCommand(lspItem.command);
+  }
+  function toMonacoDocumentation$1(doc) {
+    if (!doc) return void 0;
+    if (typeof doc === "string") return doc;
+    return {
+      value: doc.value,
+      isTrusted: true
+    };
+  }
+  var LspHoverFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { hover: {
+        dynamicRegistration: true,
+        contentFormat: [MarkupKind.Markdown, MarkupKind.PlainText]
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentHover, true, (capability) => {
+        return editor_api.languages.registerHoverProvider(toMonacoLanguageSelector(capability.documentSelector), new LspHoverProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspHoverProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideHover(model, position, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentHover({
+        textDocument: translated.textDocument,
+        position: translated.position
+      });
+      if (!result || !result.contents) return null;
+      return {
+        contents: toMonacoMarkdownString(result.contents),
+        range: result.range ? this._client.bridge.translateBackRange(translated.textDocument, result.range).range : void 0
+      };
+    }
+  };
+  function toMonacoMarkdownString(contents) {
+    if (Array.isArray(contents)) return contents.map((c) => toSingleMarkdownString(c));
+    return [toSingleMarkdownString(contents)];
+  }
+  function toSingleMarkdownString(content) {
+    if (typeof content === "string") return {
+      value: content,
+      isTrusted: true
+    };
+    if ("kind" in content) return {
+      value: content.value,
+      isTrusted: true
+    };
+    return {
+      value: `\`\`\`${content.language}
+${content.value}
+\`\`\``,
+      isTrusted: true
+    };
+  }
+  var LspSignatureHelpFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { signatureHelp: {
+        dynamicRegistration: true,
+        contextSupport: true,
+        signatureInformation: {
+          documentationFormat: [MarkupKind.Markdown, MarkupKind.PlainText],
+          parameterInformation: { labelOffsetSupport: true },
+          activeParameterSupport: true
+        }
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentSignatureHelp, true, (capability) => {
+        return editor_api.languages.registerSignatureHelpProvider(toMonacoLanguageSelector(capability.documentSelector), new LspSignatureHelpProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspSignatureHelpProvider = class {
+    signatureHelpTriggerCharacters;
+    signatureHelpRetriggerCharacters;
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+      this.signatureHelpTriggerCharacters = _capabilities.triggerCharacters;
+      this.signatureHelpRetriggerCharacters = _capabilities.retriggerCharacters;
+    }
+    async provideSignatureHelp(model, position, token, context) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentSignatureHelp({
+        textDocument: translated.textDocument,
+        position: translated.position,
+        context: {
+          triggerKind: toLspSignatureHelpTriggerKind(context.triggerKind),
+          triggerCharacter: context.triggerCharacter,
+          isRetrigger: context.isRetrigger
+        }
+      });
+      if (!result) return null;
+      return {
+        value: {
+          signatures: result.signatures.map((sig) => ({
+            label: sig.label,
+            documentation: toMonacoDocumentation(sig.documentation),
+            parameters: sig.parameters?.map((param) => ({
+              label: param.label,
+              documentation: toMonacoDocumentation(param.documentation)
+            })) || [],
+            activeParameter: sig.activeParameter
+          })),
+          activeSignature: result.activeSignature || 0,
+          activeParameter: result.activeParameter || 0
+        },
+        dispose: () => {
+        }
+      };
+    }
+  };
+  function toMonacoDocumentation(doc) {
+    if (!doc) return void 0;
+    if (typeof doc === "string") return doc;
+    return {
+      value: doc.value,
+      isTrusted: true
+    };
+  }
+  var LspDefinitionFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { definition: {
+        dynamicRegistration: true,
+        linkSupport: true
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentDefinition, true, (capability) => {
+        return editor_api.languages.registerDefinitionProvider(toMonacoLanguageSelector(capability.documentSelector), new LspDefinitionProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspDefinitionProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideDefinition(model, position, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentDefinition({
+        textDocument: translated.textDocument,
+        position: translated.position
+      });
+      if (!result) return null;
+      if (Array.isArray(result)) return result.map((loc) => toMonacoLocation(loc, this._client));
+      return toMonacoLocation(result, this._client);
+    }
+  };
+  var LspDeclarationFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { declaration: {
+        dynamicRegistration: true,
+        linkSupport: true
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentDeclaration, true, (capability) => {
+        return editor_api.languages.registerDeclarationProvider(toMonacoLanguageSelector(capability.documentSelector), new LspDeclarationProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspDeclarationProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideDeclaration(model, position, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentDeclaration({
+        textDocument: translated.textDocument,
+        position: translated.position
+      });
+      if (!result) return null;
+      if (Array.isArray(result)) return result.map((loc) => toMonacoLocation(loc, this._client));
+      return toMonacoLocation(result, this._client);
+    }
+  };
+  var LspTypeDefinitionFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { typeDefinition: {
+        dynamicRegistration: true,
+        linkSupport: true
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentTypeDefinition, true, (capability) => {
+        return editor_api.languages.registerTypeDefinitionProvider(toMonacoLanguageSelector(capability.documentSelector), new LspTypeDefinitionProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspTypeDefinitionProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideTypeDefinition(model, position, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentTypeDefinition({
+        textDocument: translated.textDocument,
+        position: translated.position
+      });
+      if (!result) return null;
+      if (Array.isArray(result)) return result.map((loc) => toMonacoLocation(loc, this._client));
+      return toMonacoLocation(result, this._client);
+    }
+  };
+  var LspImplementationFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { implementation: {
+        dynamicRegistration: true,
+        linkSupport: true
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentImplementation, true, (capability) => {
+        return editor_api.languages.registerImplementationProvider(toMonacoLanguageSelector(capability.documentSelector), new LspImplementationProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspImplementationProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideImplementation(model, position, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentImplementation({
+        textDocument: translated.textDocument,
+        position: translated.position
+      });
+      if (!result) return null;
+      if (Array.isArray(result)) return result.map((loc) => toMonacoLocation(loc, this._client));
+      return toMonacoLocation(result, this._client);
+    }
+  };
+  var LspReferencesFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { references: { dynamicRegistration: true } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentReferences, true, (capability) => {
+        return editor_api.languages.registerReferenceProvider(toMonacoLanguageSelector(capability.documentSelector), new LspReferenceProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspReferenceProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideReferences(model, position, context, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentReferences({
+        textDocument: translated.textDocument,
+        position: translated.position,
+        context: { includeDeclaration: context.includeDeclaration }
+      });
+      if (!result) return null;
+      return result.map((loc) => {
+        const translated$1 = this._client.bridge.translateBackRange({ uri: loc.uri }, loc.range);
+        return {
+          uri: translated$1.textModel.uri,
+          range: translated$1.range
+        };
+      });
+    }
+  };
+  var LspDocumentHighlightFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { documentHighlight: { dynamicRegistration: true } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentDocumentHighlight, true, (capability) => {
+        return editor_api.languages.registerDocumentHighlightProvider(toMonacoLanguageSelector(capability.documentSelector), new LspDocumentHighlightProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspDocumentHighlightProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideDocumentHighlights(model, position, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentDocumentHighlight({
+        textDocument: translated.textDocument,
+        position: translated.position
+      });
+      if (!result) return null;
+      return result.map((highlight) => ({
+        range: this._client.bridge.translateBackRange(translated.textDocument, highlight.range).range,
+        kind: toMonacoDocumentHighlightKind(highlight.kind)
+      }));
+    }
+  };
+  var LspDocumentSymbolFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { documentSymbol: {
+        dynamicRegistration: true,
+        hierarchicalDocumentSymbolSupport: true,
+        symbolKind: { valueSet: Array.from(lspSymbolKindToMonacoSymbolKind.keys()) },
+        tagSupport: { valueSet: [SymbolTag.Deprecated] }
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentDocumentSymbol, true, (capability) => {
+        return editor_api.languages.registerDocumentSymbolProvider(toMonacoLanguageSelector(capability.documentSelector), new LspDocumentSymbolProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspDocumentSymbolProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideDocumentSymbols(model, token) {
+      const translated = this._client.bridge.translate(model, new editor_api.Position(1, 1));
+      const result = await this._client.server.textDocumentDocumentSymbol({ textDocument: translated.textDocument });
+      if (!result) return null;
+      if (Array.isArray(result) && result.length > 0) if ("location" in result[0]) return result.map((symbol) => toMonacoSymbolInformation(symbol, this._client));
+      else return result.map((symbol) => toMonacoDocumentSymbol(symbol, this._client, translated.textDocument));
+      return [];
+    }
+  };
+  function toMonacoDocumentSymbol(symbol, client, textDocument) {
+    return {
+      name: symbol.name,
+      detail: symbol.detail || "",
+      kind: toMonacoSymbolKind(symbol.kind),
+      tags: symbol.tags?.map((tag) => toMonacoSymbolTag(tag)).filter((t) => t !== void 0) || [],
+      range: client.bridge.translateBackRange(textDocument, symbol.range).range,
+      selectionRange: client.bridge.translateBackRange(textDocument, symbol.selectionRange).range,
+      children: symbol.children?.map((child) => toMonacoDocumentSymbol(child, client, textDocument)) || []
+    };
+  }
+  function toMonacoSymbolInformation(symbol, client) {
+    return {
+      name: symbol.name,
+      detail: "",
+      kind: toMonacoSymbolKind(symbol.kind),
+      tags: symbol.tags?.map((tag) => toMonacoSymbolTag(tag)).filter((t) => t !== void 0) || [],
+      range: client.bridge.translateBackRange({ uri: symbol.location.uri }, symbol.location.range).range,
+      selectionRange: client.bridge.translateBackRange({ uri: symbol.location.uri }, symbol.location.range).range,
+      children: []
+    };
+  }
+  var LspRenameFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { rename: {
+        dynamicRegistration: true,
+        prepareSupport: true
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentRename, true, (capability) => {
+        return editor_api.languages.registerRenameProvider(toMonacoLanguageSelector(capability.documentSelector), new LspRenameProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspRenameProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideRenameEdits(model, position, newName, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentRename({
+        textDocument: translated.textDocument,
+        position: translated.position,
+        newName
+      });
+      if (!result) return null;
+      return toMonacoWorkspaceEdit$1(result, this._client);
+    }
+    async resolveRenameLocation(model, position, token) {
+      if (!this._capabilities.prepareProvider) return null;
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentPrepareRename({
+        textDocument: translated.textDocument,
+        position: translated.position
+      });
+      if (!result) return null;
+      if ("range" in result && "placeholder" in result) return {
+        range: this._client.bridge.translateBackRange(translated.textDocument, result.range).range,
+        text: result.placeholder
+      };
+      else if ("defaultBehavior" in result) return null;
+      else if ("start" in result && "end" in result) {
+        const range = this._client.bridge.translateBackRange(translated.textDocument, result).range;
+        return {
+          range,
+          text: model.getValueInRange(range)
+        };
+      }
+      return null;
+    }
+  };
+  function toMonacoWorkspaceEdit$1(edit, client) {
+    const edits = [];
+    if (edit.changes) for (const uri in edit.changes) {
+      const textEdits = edit.changes[uri];
+      for (const textEdit of textEdits) {
+        const translated = client.bridge.translateBackRange({ uri }, textEdit.range);
+        edits.push({
+          resource: translated.textModel.uri,
+          versionId: void 0,
+          textEdit: {
+            range: translated.range,
+            text: textEdit.newText
+          }
+        });
+      }
+    }
+    if (edit.documentChanges) {
+      for (const change of edit.documentChanges) if ("textDocument" in change) {
+        const uri = change.textDocument.uri;
+        for (const textEdit of change.edits) {
+          const translated = client.bridge.translateBackRange({ uri }, textEdit.range);
+          edits.push({
+            resource: translated.textModel.uri,
+            versionId: change.textDocument.version,
+            textEdit: {
+              range: translated.range,
+              text: textEdit.newText
+            }
+          });
+        }
+      }
+    }
+    return { edits };
+  }
+  var LspCodeActionFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { codeAction: {
+        dynamicRegistration: true,
+        codeActionLiteralSupport: { codeActionKind: { valueSet: Array.from(lspCodeActionKindToMonacoCodeActionKind.keys()) } },
+        isPreferredSupport: true,
+        disabledSupport: true,
+        dataSupport: true,
+        resolveSupport: { properties: ["edit"] }
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentCodeAction, true, (capability) => {
+        return editor_api.languages.registerCodeActionProvider(toMonacoLanguageSelector(capability.documentSelector), new LspCodeActionProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspCodeActionProvider = class {
+    resolveCodeAction;
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+      if (_capabilities.resolveProvider) this.resolveCodeAction = async (codeAction, token) => {
+        if (codeAction._lspAction) {
+          const resolved = await this._client.server.codeActionResolve(codeAction._lspAction);
+          if (resolved.edit) codeAction.edit = toMonacoWorkspaceEdit(resolved.edit, this._client);
+          if (resolved.command) codeAction.command = toMonacoCommand(resolved.command);
+        }
+        return codeAction;
+      };
+    }
+    async provideCodeActions(model, range, context, token) {
+      const translated = this._client.bridge.translate(model, range.getStartPosition());
+      const result = await this._client.server.textDocumentCodeAction({
+        textDocument: translated.textDocument,
+        range: this._client.bridge.translateRange(model, range),
+        context: {
+          diagnostics: context.markers.map((marker) => ({
+            range: this._client.bridge.translateRange(model, editor_api.Range.lift(marker)),
+            message: marker.message,
+            severity: toLspDiagnosticSeverity(marker.severity)
+          })),
+          triggerKind: toLspCodeActionTriggerKind(context.trigger)
+        }
+      });
+      if (!result) return null;
+      return {
+        actions: (Array.isArray(result) ? result : [result]).map((action) => {
+          if ("title" in action && !("kind" in action)) {
+            const cmd = action;
+            return {
+              title: cmd.title,
+              command: toMonacoCommand(cmd)
+            };
+          } else {
+            const codeAction = action;
+            return {
+              title: codeAction.title,
+              kind: toMonacoCodeActionKind(codeAction.kind),
+              isPreferred: codeAction.isPreferred,
+              disabled: codeAction.disabled?.reason,
+              edit: codeAction.edit ? toMonacoWorkspaceEdit(codeAction.edit, this._client) : void 0,
+              command: toMonacoCommand(codeAction.command),
+              _lspAction: codeAction
+            };
+          }
+        }),
+        dispose: () => {
+        }
+      };
+    }
+  };
+  function toMonacoWorkspaceEdit(edit, client) {
+    const edits = [];
+    if (edit.changes) for (const uri in edit.changes) {
+      const textEdits = edit.changes[uri];
+      for (const textEdit of textEdits) {
+        const translated = client.bridge.translateBackRange({ uri }, textEdit.range);
+        edits.push({
+          resource: translated.textModel.uri,
+          versionId: void 0,
+          textEdit: {
+            range: translated.range,
+            text: textEdit.newText
+          }
+        });
+      }
+    }
+    if (edit.documentChanges) {
+      for (const change of edit.documentChanges) if ("textDocument" in change) {
+        const uri = change.textDocument.uri;
+        for (const textEdit of change.edits) {
+          const translated = client.bridge.translateBackRange({ uri }, textEdit.range);
+          edits.push({
+            resource: translated.textModel.uri,
+            versionId: change.textDocument.version ?? void 0,
+            textEdit: {
+              range: translated.range,
+              text: textEdit.newText
+            }
+          });
+        }
+      }
+    }
+    return { edits };
+  }
+  var LspCodeLensFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { codeLens: { dynamicRegistration: true } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentCodeLens, true, (capability) => {
+        return editor_api.languages.registerCodeLensProvider(toMonacoLanguageSelector(capability.documentSelector), new LspCodeLensProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspCodeLensProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideCodeLenses(model, token) {
+      const translated = this._client.bridge.translate(model, new editor_api.Position(1, 1));
+      const result = await this._client.server.textDocumentCodeLens({ textDocument: translated.textDocument });
+      if (!result) return null;
+      return {
+        lenses: result.map((lens) => {
+          return {
+            range: assertTargetTextModel(this._client.bridge.translateBackRange(translated.textDocument, lens.range), model).range,
+            command: toMonacoCommand(lens.command),
+            _lspCodeLens: lens
+          };
+        }),
+        dispose: () => {
+        }
+      };
+    }
+    async resolveCodeLens(model, codeLens, token) {
+      if (!this._capabilities.resolveProvider || !codeLens._lspCodeLens) return codeLens;
+      const resolved = await this._client.server.codeLensResolve(codeLens._lspCodeLens);
+      if (resolved.command) codeLens.command = {
+        id: resolved.command.command,
+        title: resolved.command.title,
+        arguments: resolved.command.arguments
+      };
+      return codeLens;
+    }
+  };
+  var LspDocumentLinkFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { documentLink: {
+        dynamicRegistration: true,
+        tooltipSupport: true
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentDocumentLink, true, (capability) => {
+        return editor_api.languages.registerLinkProvider(toMonacoLanguageSelector(capability.documentSelector), new LspDocumentLinkProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspDocumentLinkProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideLinks(model, token) {
+      const translated = this._client.bridge.translate(model, new editor_api.Position(1, 1));
+      const result = await this._client.server.textDocumentDocumentLink({ textDocument: translated.textDocument });
+      if (!result) return null;
+      return { links: result.map((link2) => ({
+        range: this._client.bridge.translateBackRange(translated.textDocument, link2.range).range,
+        url: link2.target,
+        tooltip: link2.tooltip
+      })) };
+    }
+    async resolveLink(link2, token) {
+      if (!this._capabilities.resolveProvider) return link2;
+      return link2;
+    }
+  };
+  var LspFormattingFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { formatting: { dynamicRegistration: true } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentFormatting, true, (capability) => {
+        return editor_api.languages.registerDocumentFormattingEditProvider(toMonacoLanguageSelector(capability.documentSelector), new LspDocumentFormattingProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspDocumentFormattingProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideDocumentFormattingEdits(model, options, token) {
+      const translated = this._client.bridge.translate(model, new editor_api.Position(1, 1));
+      const result = await this._client.server.textDocumentFormatting({
+        textDocument: translated.textDocument,
+        options: {
+          tabSize: options.tabSize,
+          insertSpaces: options.insertSpaces
+        }
+      });
+      if (!result) return null;
+      return result.map((edit) => ({
+        range: this._client.bridge.translateBackRange(translated.textDocument, edit.range).range,
+        text: edit.newText
+      }));
+    }
+  };
+  var LspRangeFormattingFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { rangeFormatting: { dynamicRegistration: true } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentRangeFormatting, true, (capability) => {
+        return editor_api.languages.registerDocumentRangeFormattingEditProvider(toMonacoLanguageSelector(capability.documentSelector), new LspDocumentRangeFormattingProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspDocumentRangeFormattingProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideDocumentRangeFormattingEdits(model, range, options, token) {
+      const translated = this._client.bridge.translate(model, range.getStartPosition());
+      const result = await this._client.server.textDocumentRangeFormatting({
+        textDocument: translated.textDocument,
+        range: this._client.bridge.translateRange(model, range),
+        options: {
+          tabSize: options.tabSize,
+          insertSpaces: options.insertSpaces
+        }
+      });
+      if (!result) return null;
+      return result.map((edit) => ({
+        range: this._client.bridge.translateBackRange(translated.textDocument, edit.range).range,
+        text: edit.newText
+      }));
+    }
+  };
+  var LspOnTypeFormattingFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { onTypeFormatting: { dynamicRegistration: true } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentOnTypeFormatting, true, (capability) => {
+        return editor_api.languages.registerOnTypeFormattingEditProvider(toMonacoLanguageSelector(capability.documentSelector), new LspOnTypeFormattingProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspOnTypeFormattingProvider = class {
+    autoFormatTriggerCharacters;
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+      this.autoFormatTriggerCharacters = [_capabilities.firstTriggerCharacter, ..._capabilities.moreTriggerCharacter || []];
+    }
+    async provideOnTypeFormattingEdits(model, position, ch, options, token) {
+      const translated = this._client.bridge.translate(model, position);
+      const result = await this._client.server.textDocumentOnTypeFormatting({
+        textDocument: translated.textDocument,
+        position: translated.position,
+        ch,
+        options: {
+          tabSize: options.tabSize,
+          insertSpaces: options.insertSpaces
+        }
+      });
+      if (!result) return null;
+      return result.map((edit) => ({
+        range: this._client.bridge.translateBackRange(translated.textDocument, edit.range).range,
+        text: edit.newText
+      }));
+    }
+  };
+  var LspFoldingRangeFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { foldingRange: {
+        dynamicRegistration: true,
+        rangeLimit: 5e3,
+        lineFoldingOnly: false,
+        foldingRangeKind: { valueSet: [
+          FoldingRangeKind.Comment,
+          FoldingRangeKind.Imports,
+          FoldingRangeKind.Region
+        ] }
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentFoldingRange, true, (capability) => {
+        return editor_api.languages.registerFoldingRangeProvider(toMonacoLanguageSelector(capability.documentSelector), new LspFoldingRangeProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspFoldingRangeProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideFoldingRanges(model, context, token) {
+      const translated = this._client.bridge.translate(model, new editor_api.Position(1, 1));
+      const result = await this._client.server.textDocumentFoldingRange({ textDocument: translated.textDocument });
+      if (!result) return null;
+      return result.map((range) => ({
+        start: range.startLine + 1,
+        end: range.endLine + 1,
+        kind: toMonacoFoldingRangeKind(range.kind)
+      }));
+    }
+  };
+  var LspSelectionRangeFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { selectionRange: { dynamicRegistration: true } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentSelectionRange, true, (capability) => {
+        return editor_api.languages.registerSelectionRangeProvider(toMonacoLanguageSelector(capability.documentSelector), new LspSelectionRangeProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspSelectionRangeProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    async provideSelectionRanges(model, positions, token) {
+      const translated = this._client.bridge.translate(model, positions[0]);
+      const result = await this._client.server.textDocumentSelectionRange({
+        textDocument: translated.textDocument,
+        positions: positions.map((pos) => this._client.bridge.translate(model, pos).position)
+      });
+      if (!result) return null;
+      return result.map((selRange) => this.convertSelectionRange(selRange, translated.textDocument));
+    }
+    convertSelectionRange(range, textDocument) {
+      const result = [];
+      let current = range;
+      while (current) {
+        result.push({ range: this._client.bridge.translateBackRange(textDocument, current.range).range });
+        current = current.parent;
+      }
+      return result;
+    }
+  };
+  var LspInlayHintsFeature = class extends Disposable {
+    _providers = /* @__PURE__ */ new Set();
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({
+        textDocument: { inlayHint: {
+          dynamicRegistration: true,
+          resolveSupport: { properties: [
+            "tooltip",
+            "textEdits",
+            "label.tooltip",
+            "label.location",
+            "label.command"
+          ] }
+        } },
+        workspace: { inlayHint: { refreshSupport: true } }
+      }));
+      this._register(this._connection.connection.registerRequestHandler(api.client.workspaceInlayHintRefresh, async () => {
+        for (const provider of this._providers) provider.refresh();
+        return { ok: null };
+      }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentInlayHint, true, (capability) => {
+        const provider = new LspInlayHintsProvider(this._connection, capability);
+        this._providers.add(provider);
+        const disposable = editor_api.languages.registerInlayHintsProvider(toMonacoLanguageSelector(capability.documentSelector), provider);
+        return { dispose: () => {
+          this._providers.delete(provider);
+          disposable.dispose();
+        } };
+      }));
+    }
+  };
+  var LspInlayHintsProvider = class {
+    _onDidChangeInlayHints = new editor_api.Emitter();
+    onDidChangeInlayHints = this._onDidChangeInlayHints.event;
+    resolveInlayHint;
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+      if (_capabilities.resolveProvider) this.resolveInlayHint = async (hint, token) => {
+        const resolved = await this._client.server.inlayHintResolve(hint._lspInlayHint);
+        if (resolved.tooltip) hint.tooltip = toMonacoTooltip(resolved.tooltip);
+        if (resolved.label !== hint._lspInlayHint.label) hint.label = toLspInlayHintLabel(resolved.label);
+        if (resolved.textEdits) hint.textEdits = resolved.textEdits.map((edit) => {
+          return {
+            range: this._client.bridge.translateBackRange({ uri: hint._targetUri }, edit.range).range,
+            text: edit.newText
+          };
+        });
+        return hint;
+      };
+    }
+    refresh() {
+      this._onDidChangeInlayHints.fire();
+    }
+    async provideInlayHints(model, range, token) {
+      const translated = this._client.bridge.translate(model, range.getStartPosition());
+      const result = await retryOnContentModified(async () => await this._client.server.textDocumentInlayHint({
+        textDocument: translated.textDocument,
+        range: this._client.bridge.translateRange(model, range)
+      }));
+      if (!result) return null;
+      return {
+        hints: result.map((hint) => {
+          return {
+            label: toLspInlayHintLabel(hint.label),
+            position: assertTargetTextModel(this._client.bridge.translateBack(translated.textDocument, hint.position), model).position,
+            kind: toMonacoInlayHintKind(hint.kind),
+            tooltip: toMonacoTooltip(hint.tooltip),
+            paddingLeft: hint.paddingLeft,
+            paddingRight: hint.paddingRight,
+            textEdits: hint.textEdits?.map((edit) => ({
+              range: assertTargetTextModel(this._client.bridge.translateBackRange(translated.textDocument, edit.range), model).range,
+              text: edit.newText
+            })),
+            _lspInlayHint: hint,
+            _targetUri: translated.textDocument.uri
+          };
+        }),
+        dispose: () => {
+        }
+      };
+    }
+  };
+  async function retryOnContentModified(cb) {
+    for (let triesLeft = 3; ; triesLeft--) try {
+      return await cb();
+    } catch (e) {
+      if (e.message === "content modified" && triesLeft > 0) continue;
+      throw e;
+    }
+  }
+  function toLspInlayHintLabel(label) {
+    if (typeof label === "string") return label;
+    return label.map((part) => {
+      const monacoLabelPart = {
+        label: part.value,
+        tooltip: toMonacoTooltip(part.tooltip),
+        command: toMonacoCommand(part.command)
+      };
+      if (part.location) monacoLabelPart.location = {
+        uri: editor_api.Uri.parse(part.location.uri),
+        range: new editor_api.Range(part.location.range.start.line + 1, part.location.range.start.character + 1, part.location.range.end.line + 1, part.location.range.end.character + 1)
+      };
+      return monacoLabelPart;
+    });
+  }
+  function toMonacoTooltip(tooltip) {
+    if (!tooltip) return;
+    if (typeof tooltip === "string") return tooltip;
+    return {
+      value: tooltip.value,
+      isTrusted: true
+    };
+  }
+  var LspSemanticTokensFeature = class extends Disposable {
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: { semanticTokens: {
+        dynamicRegistration: true,
+        requests: {
+          range: true,
+          full: { delta: true }
+        },
+        tokenTypes: [
+          "namespace",
+          "type",
+          "class",
+          "enum",
+          "interface",
+          "struct",
+          "typeParameter",
+          "parameter",
+          "variable",
+          "property",
+          "enumMember",
+          "event",
+          "function",
+          "method",
+          "macro",
+          "keyword",
+          "modifier",
+          "comment",
+          "string",
+          "number",
+          "regexp",
+          "operator",
+          "decorator"
+        ],
+        tokenModifiers: [
+          "declaration",
+          "definition",
+          "readonly",
+          "static",
+          "deprecated",
+          "abstract",
+          "async",
+          "modification",
+          "documentation",
+          "defaultLibrary"
+        ],
+        formats: [TokenFormat.Relative],
+        overlappingTokenSupport: false,
+        multilineTokenSupport: true
+      } } }));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentSemanticTokensFull, true, (capability) => {
+        return editor_api.languages.registerDocumentSemanticTokensProvider(toMonacoLanguageSelector(capability.documentSelector), new LspSemanticTokensProvider(this._connection, capability));
+      }));
+    }
+  };
+  var LspSemanticTokensProvider = class {
+    constructor(_client, _capabilities) {
+      this._client = _client;
+      this._capabilities = _capabilities;
+    }
+    getLegend() {
+      return {
+        tokenTypes: this._capabilities.legend.tokenTypes,
+        tokenModifiers: this._capabilities.legend.tokenModifiers
+      };
+    }
+    releaseDocumentSemanticTokens(resultId) {
+    }
+    async provideDocumentSemanticTokens(model, lastResultId, token) {
+      const translated = this._client.bridge.translate(model, model.getPositionAt(0));
+      const full = this._capabilities.full;
+      if (lastResultId && full && typeof full === "object" && full.delta) {
+        const deltaResult = await this._client.server.textDocumentSemanticTokensFullDelta({
+          textDocument: translated.textDocument,
+          previousResultId: lastResultId
+        });
+        if (!deltaResult) return null;
+        if ("edits" in deltaResult) return {
+          resultId: deltaResult.resultId,
+          edits: deltaResult.edits.map((edit) => ({
+            start: edit.start,
+            deleteCount: edit.deleteCount,
+            data: edit.data ? new Uint32Array(edit.data) : void 0
+          }))
+        };
+        else return {
+          resultId: deltaResult.resultId,
+          data: new Uint32Array(deltaResult.data)
+        };
+      }
+      const result = await this._client.server.textDocumentSemanticTokensFull({ textDocument: translated.textDocument });
+      if (!result) return null;
+      return {
+        resultId: result.resultId,
+        data: new Uint32Array(result.data)
+      };
+    }
+    async provideDocumentSemanticTokensEdits(model, previousResultId, token) {
+      return this.provideDocumentSemanticTokens(model, previousResultId, token);
+    }
+  };
+  var LspDiagnosticsFeature = class extends Disposable {
+    _diagnosticsMarkerOwner = "lsp";
+    _pullDiagnosticProviders = /* @__PURE__ */ new Map();
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.capabilities.addStaticClientCapabilities({ textDocument: {
+        publishDiagnostics: {
+          relatedInformation: true,
+          tagSupport: { valueSet: [...lspDiagnosticTagToMonacoMarkerTag.keys()] },
+          versionSupport: true,
+          codeDescriptionSupport: true,
+          dataSupport: true
+        },
+        diagnostic: {
+          dynamicRegistration: true,
+          relatedDocumentSupport: true
+        }
+      } }));
+      debugger;
+      this._register(this._connection.connection.registerNotificationHandler(api.client.textDocumentPublishDiagnostics, (params) => this._handlePublishDiagnostics(params)));
+      this._register(this._connection.capabilities.registerCapabilityHandler(capabilities.textDocumentDiagnostic, true, (capability) => {
+        const disposables = new DisposableStore();
+        for (const model of editor_api.editor.getModels()) this._addPullDiagnosticProvider(model, capability, disposables);
+        disposables.add(editor_api.editor.onDidCreateModel((model) => {
+          this._addPullDiagnosticProvider(model, capability, disposables);
+        }));
+        return disposables;
+      }));
+    }
+    _addPullDiagnosticProvider(model, capability, disposables) {
+      model.getLanguageId();
+      if (!matchesDocumentSelector(model, capability.documentSelector)) return;
+      const provider = new ModelDiagnosticProvider(model, this._connection, this._diagnosticsMarkerOwner, capability);
+      this._pullDiagnosticProviders.set(model, provider);
+      disposables.add(provider);
+      disposables.add(model.onWillDispose(() => {
+        this._pullDiagnosticProviders.delete(model);
+      }));
+    }
+    _handlePublishDiagnostics(params) {
+      const uri = params.uri;
+      try {
+        const model = this._connection.bridge.translateBack({ uri }, {
+          line: 0,
+          character: 0
+        }).textModel;
+        if (!model || model.isDisposed()) return;
+        const markers = params.diagnostics.map((diagnostic) => toDiagnosticMarker(diagnostic));
+        editor_api.editor.setModelMarkers(model, this._diagnosticsMarkerOwner, markers);
+      } catch (error) {
+        console.debug(`Could not set diagnostics for ${uri}:`, error);
+      }
+    }
+  };
+  var ModelDiagnosticProvider = class extends Disposable {
+    _updateHandle;
+    _previousResultId;
+    constructor(_model, _connection, _markerOwner, _capability) {
+      super();
+      this._model = _model;
+      this._connection = _connection;
+      this._markerOwner = _markerOwner;
+      this._capability = _capability;
+      this._register(this._model.onDidChangeContent(() => {
+        this._scheduleDiagnosticUpdate();
+      }));
+      this._scheduleDiagnosticUpdate();
+    }
+    _scheduleDiagnosticUpdate() {
+      if (this._updateHandle !== void 0) clearTimeout(this._updateHandle);
+      this._updateHandle = window.setTimeout(() => {
+        this._updateHandle = void 0;
+        this._requestDiagnostics();
+      }, 500);
+    }
+    async _requestDiagnostics() {
+      if (this._model.isDisposed()) return;
+      try {
+        const translated = this._connection.bridge.translate(this._model, new editor_api.Position(1, 1));
+        const result = await this._connection.server.textDocumentDiagnostic({
+          textDocument: translated.textDocument,
+          identifier: this._capability.identifier,
+          previousResultId: this._previousResultId
+        });
+        if (this._model.isDisposed()) return;
+        this._handleDiagnosticReport(result);
+      } catch (error) {
+        console.error("Error requesting diagnostics:", error);
+      }
+    }
+    _handleDiagnosticReport(report) {
+      if (report.kind === "full") {
+        this._previousResultId = report.resultId;
+        const markers = report.items.map((diagnostic) => toDiagnosticMarker(diagnostic));
+        editor_api.editor.setModelMarkers(this._model, this._markerOwner, markers);
+        if ("relatedDocuments" in report && report.relatedDocuments) this._handleRelatedDocuments(report.relatedDocuments);
+      } else if (report.kind === "unchanged") this._previousResultId = report.resultId;
+    }
+    _handleRelatedDocuments(relatedDocuments) {
+      for (const [uri, report] of Object.entries(relatedDocuments)) try {
+        const model = this._connection.bridge.translateBack({ uri }, {
+          line: 0,
+          character: 0
+        }).textModel;
+        if (!model || model.isDisposed()) continue;
+        if (report.kind === "full") {
+          const markers = report.items.map((diagnostic) => toDiagnosticMarker(diagnostic));
+          editor_api.editor.setModelMarkers(model, this._markerOwner, markers);
+        }
+      } catch (error) {
+        console.debug(`Could not set related diagnostics for ${uri}:`, error);
+      }
+    }
+    dispose() {
+      if (this._updateHandle !== void 0) {
+        clearTimeout(this._updateHandle);
+        this._updateHandle = void 0;
+      }
+      super.dispose();
+    }
+  };
+  var LspConnection = class {
+    constructor(server, bridge, capabilities$1, connection) {
+      this.server = server;
+      this.bridge = bridge;
+      this.capabilities = capabilities$1;
+      this.connection = connection;
+    }
+  };
+  var LspCapabilitiesRegistry = class extends Disposable {
+    _staticCapabilities = /* @__PURE__ */ new Set();
+    _dynamicFromStatic = DynamicFromStaticOptions.create();
+    _registrations = /* @__PURE__ */ new Map();
+    _serverCapabilities = void 0;
+    constructor(_connection) {
+      super();
+      this._connection = _connection;
+      this._register(this._connection.registerRequestHandler(api.client.clientRegisterCapability, async (params) => {
+        for (const registration of params.registrations) {
+          const capability = getCapabilityByMethod(registration.method);
+          const r = new CapabilityRegistration(registration.id, capability, registration.registerOptions, false);
+          this._registerCapabilityOptions(r);
+        }
+        return { ok: null };
+      }));
+      this._register(this._connection.registerRequestHandler(api.client.clientUnregisterCapability, async (params) => {
+        for (const unregistration of params.unregisterations) {
+          const capability = getCapabilityByMethod(unregistration.method);
+          const info = this._registrations.get(capability);
+          const handlerInfo = info?.registrations.get(unregistration.id);
+          if (!handlerInfo) throw new Error(`No registration for method ${unregistration.method} with id ${unregistration.id}`);
+          handlerInfo?.handlerDisposables.forEach((d) => d.dispose());
+          info?.registrations.delete(unregistration.id);
+        }
+        return { ok: null };
+      }));
+    }
+    _registerCapabilityOptions(registration) {
+      let registrationForMethod = this._registrations.get(registration.capability);
+      if (!registrationForMethod) {
+        registrationForMethod = new CapabilityInfo();
+        this._registrations.set(registration.capability, registrationForMethod);
+      }
+      if (registrationForMethod.registrations.has(registration.id)) throw new Error(`Handler for method ${registration.capability.method} with id ${registration.id} already registered`);
+      registrationForMethod.registrations.set(registration.id, registration);
+      for (const h of registrationForMethod.handlers) {
+        if (!h.handleStaticCapability && registration.isFromStatic) continue;
+        registration.handlerDisposables.set(h, h.handler(registration.options));
+      }
+    }
+    setServerCapabilities(serverCapabilities) {
+      if (this._serverCapabilities) throw new Error("Server capabilities already set");
+      this._serverCapabilities = serverCapabilities;
+      for (const cap of Object.values(capabilities)) {
+        const options = this._dynamicFromStatic.getOptions(cap, serverCapabilities);
+        if (options) this._registerCapabilityOptions(new CapabilityRegistration(cap.method, cap, options, true));
+      }
+    }
+    getClientCapabilities() {
+      const result = {};
+      for (const c of this._staticCapabilities) deepAssign(result, c.cap);
+      return result;
+    }
+    addStaticClientCapabilities(capability) {
+      const obj = { cap: capability };
+      this._staticCapabilities.add(obj);
+      return { dispose: () => {
+        this._staticCapabilities.delete(obj);
+      } };
+    }
+    registerCapabilityHandler(capability, handleStaticCapability, handler) {
+      let info = this._registrations.get(capability);
+      if (!info) {
+        info = new CapabilityInfo();
+        this._registrations.set(capability, info);
+      }
+      const handlerInfo = new CapabilityHandler(capability, handleStaticCapability, handler);
+      info.handlers.add(handlerInfo);
+      for (const registration of info.registrations.values()) {
+        if (!handlerInfo.handleStaticCapability && registration.isFromStatic) continue;
+        registration.handlerDisposables.set(handlerInfo, handler(registration.options));
+      }
+      return { dispose: () => {
+        info.handlers.delete(handlerInfo);
+        for (const registration of info.registrations.values()) {
+          const disposable = registration.handlerDisposables.get(handlerInfo);
+          if (disposable) {
+            disposable.dispose();
+            registration.handlerDisposables.delete(handlerInfo);
+          }
+        }
+      } };
+    }
+  };
+  var CapabilityHandler = class {
+    constructor(capability, handleStaticCapability, handler) {
+      this.capability = capability;
+      this.handleStaticCapability = handleStaticCapability;
+      this.handler = handler;
+    }
+  };
+  var CapabilityRegistration = class {
+    handlerDisposables = /* @__PURE__ */ new Map();
+    constructor(id, capability, options, isFromStatic) {
+      this.id = id;
+      this.capability = capability;
+      this.options = options;
+      this.isFromStatic = isFromStatic;
+    }
+  };
+  const capabilitiesByMethod = new Map([...Object.values(capabilities)].map((c) => [c.method, c]));
+  function getCapabilityByMethod(method) {
+    const c = capabilitiesByMethod.get(method);
+    if (!c) throw new Error(`No capability found for method ${method}`);
+    return c;
+  }
+  var CapabilityInfo = class {
+    handlers = /* @__PURE__ */ new Set();
+    registrations = /* @__PURE__ */ new Map();
+  };
+  var DynamicFromStaticOptions = class DynamicFromStaticOptions2 {
+    _mappings = /* @__PURE__ */ new Map();
+    static create() {
+      const o = new DynamicFromStaticOptions2();
+      o.set(capabilities.textDocumentDidChange, (s) => {
+        if (s.textDocumentSync === void 0) return;
+        if (typeof s.textDocumentSync === "object") return {
+          syncKind: s.textDocumentSync.change ?? TextDocumentSyncKind.None,
+          documentSelector: null
+        };
+        else return {
+          syncKind: s.textDocumentSync,
+          documentSelector: null
+        };
+      });
+      o.set(capabilities.textDocumentCompletion, (s) => s.completionProvider);
+      o.set(capabilities.textDocumentHover, (s) => s.hoverProvider);
+      o.set(capabilities.textDocumentSignatureHelp, (s) => s.signatureHelpProvider);
+      o.set(capabilities.textDocumentDefinition, (s) => s.definitionProvider);
+      o.set(capabilities.textDocumentReferences, (s) => s.referencesProvider);
+      o.set(capabilities.textDocumentDocumentHighlight, (s) => s.documentHighlightProvider);
+      o.set(capabilities.textDocumentDocumentSymbol, (s) => s.documentSymbolProvider);
+      o.set(capabilities.textDocumentCodeAction, (s) => s.codeActionProvider);
+      o.set(capabilities.textDocumentCodeLens, (s) => s.codeLensProvider);
+      o.set(capabilities.textDocumentDocumentLink, (s) => s.documentLinkProvider);
+      o.set(capabilities.textDocumentFormatting, (s) => s.documentFormattingProvider);
+      o.set(capabilities.textDocumentRangeFormatting, (s) => s.documentRangeFormattingProvider);
+      o.set(capabilities.textDocumentOnTypeFormatting, (s) => s.documentOnTypeFormattingProvider);
+      o.set(capabilities.textDocumentRename, (s) => s.renameProvider);
+      o.set(capabilities.textDocumentFoldingRange, (s) => s.foldingRangeProvider);
+      o.set(capabilities.textDocumentDeclaration, (s) => s.declarationProvider);
+      o.set(capabilities.textDocumentTypeDefinition, (s) => s.typeDefinitionProvider);
+      o.set(capabilities.textDocumentImplementation, (s) => s.implementationProvider);
+      o.set(capabilities.textDocumentDocumentColor, (s) => s.colorProvider);
+      o.set(capabilities.textDocumentSelectionRange, (s) => s.selectionRangeProvider);
+      o.set(capabilities.textDocumentLinkedEditingRange, (s) => s.linkedEditingRangeProvider);
+      o.set(capabilities.textDocumentPrepareCallHierarchy, (s) => s.callHierarchyProvider);
+      o.set(capabilities.textDocumentSemanticTokensFull, (s) => s.semanticTokensProvider);
+      o.set(capabilities.textDocumentInlayHint, (s) => s.inlayHintProvider);
+      o.set(capabilities.textDocumentInlineValue, (s) => s.inlineValueProvider);
+      o.set(capabilities.textDocumentDiagnostic, (s) => s.diagnosticProvider);
+      o.set(capabilities.textDocumentMoniker, (s) => s.monikerProvider);
+      o.set(capabilities.textDocumentPrepareTypeHierarchy, (s) => s.typeHierarchyProvider);
+      o.set(capabilities.workspaceSymbol, (s) => s.workspaceSymbolProvider);
+      o.set(capabilities.workspaceExecuteCommand, (s) => s.executeCommandProvider);
+      return o;
+    }
+    set(capability, getOptionsFromStatic) {
+      if (this._mappings.has(capability.method)) throw new Error(`Capability for method ${capability.method} already registered`);
+      this._mappings.set(capability.method, getOptionsFromStatic);
+    }
+    getOptions(capability, serverCapabilities) {
+      const getter = this._mappings.get(capability.method);
+      if (!getter) return;
+      return getter(serverCapabilities);
+    }
+  };
+  function deepAssign(target, source) {
+    for (const key of Object.keys(source)) {
+      const srcValue = source[key];
+      if (srcValue === void 0) continue;
+      const tgtValue = target[key];
+      if (tgtValue === void 0) {
+        target[key] = srcValue;
+        continue;
+      }
+      if (typeof srcValue !== "object" || srcValue === null) {
+        target[key] = srcValue;
+        continue;
+      }
+      if (typeof tgtValue !== "object" || tgtValue === null) {
+        target[key] = srcValue;
+        continue;
+      }
+      deepAssign(tgtValue, srcValue);
+    }
+  }
+  var TextDocumentSynchronizer = class extends Disposable {
+    _managedModels = /* @__PURE__ */ new Map();
+    _managedModelsReverse = /* @__PURE__ */ new Map();
+    _started = false;
+    constructor(_server, _capabilities) {
+      super();
+      this._server = _server;
+      this._capabilities = _capabilities;
+      this._register(this._capabilities.addStaticClientCapabilities({ textDocument: { synchronization: {
+        dynamicRegistration: true,
+        willSave: false,
+        willSaveWaitUntil: false,
+        didSave: false
+      } } }));
+      this._register(_capabilities.registerCapabilityHandler(capabilities.textDocumentDidChange, true, (e) => {
+        if (this._started) return { dispose: () => {
+        } };
+        this._started = true;
+        this._register(editor_api.editor.onDidCreateModel((m) => {
+          this._getOrCreateManagedModel(m);
+        }));
+        for (const m of editor_api.editor.getModels()) this._getOrCreateManagedModel(m);
+        return { dispose: () => {
+        } };
+      }));
+    }
+    _getOrCreateManagedModel(m) {
+      if (!this._started) throw new Error("Not started");
+      const uriStr = m.uri.toString(true).toLowerCase();
+      let mm = this._managedModels.get(m);
+      if (!mm) {
+        mm = new ManagedModel(m, this._server);
+        this._managedModels.set(m, mm);
+        this._managedModelsReverse.set(uriStr, m);
+      }
+      m.onWillDispose(() => {
+        mm.dispose();
+        this._managedModels.delete(m);
+        this._managedModelsReverse.delete(uriStr);
+      });
+      return mm;
+    }
+    translateBack(textDocument, position) {
+      const uri = textDocument.uri.toLowerCase();
+      const textModel = this._managedModelsReverse.get(uri);
+      if (!textModel) throw new Error(`No text model for uri ${uri}`);
+      return {
+        textModel,
+        position: new editor_api.Position(position.line + 1, position.character + 1)
+      };
+    }
+    translateBackRange(textDocument, range) {
+      const uri = textDocument.uri.toLowerCase();
+      const textModel = this._managedModelsReverse.get(uri);
+      if (!textModel) throw new Error(`No text model for uri ${uri}`);
+      return {
+        textModel,
+        range: new editor_api.Range(range.start.line + 1, range.start.character + 1, range.end.line + 1, range.end.character + 1)
+      };
+    }
+    translate(textModel, monacoPos) {
+      return {
+        textDocument: { uri: textModel.uri.toString(true) },
+        position: {
+          line: monacoPos.lineNumber - 1,
+          character: monacoPos.column - 1
+        }
+      };
+    }
+    translateRange(textModel, monacoRange) {
+      return {
+        start: {
+          line: monacoRange.startLineNumber - 1,
+          character: monacoRange.startColumn - 1
+        },
+        end: {
+          line: monacoRange.endLineNumber - 1,
+          character: monacoRange.endColumn - 1
+        }
+      };
+    }
+  };
+  var ManagedModel = class extends Disposable {
+    constructor(_textModel, _api) {
+      super();
+      this._textModel = _textModel;
+      this._api = _api;
+      const uri = _textModel.uri.toString(true).toLowerCase();
+      this._api.textDocumentDidOpen({ textDocument: {
+        languageId: _textModel.getLanguageId(),
+        uri,
+        version: _textModel.getVersionId(),
+        text: _textModel.getValue()
+      } });
+      this._register(_textModel.onDidChangeContent((e) => {
+        const contentChanges = e.changes.map((c) => toLspTextDocumentContentChangeEvent(c));
+        this._api.textDocumentDidChange({
+          textDocument: {
+            uri,
+            version: _textModel.getVersionId()
+          },
+          contentChanges
+        });
+      }));
+      this._register({ dispose: () => {
+        this._api.textDocumentDidClose({ textDocument: { uri } });
+      } });
+    }
+  };
+  function toLspTextDocumentContentChangeEvent(change) {
+    return {
+      range: toLspRange(change.range),
+      rangeLength: change.rangeLength,
+      text: change.text
+    };
+  }
+  function toLspRange(range) {
+    return {
+      start: {
+        line: range.startLineNumber - 1,
+        character: range.startColumn - 1
+      },
+      end: {
+        line: range.endLineNumber - 1,
+        character: range.endColumn - 1
+      }
+    };
+  }
+  var MonacoLspClient = class {
+    _connection;
+    _capabilitiesRegistry;
+    _bridge;
+    _initPromise;
+    constructor(transport) {
+      const c = TypedChannel.fromTransport(transport);
+      const s = api.getServer(c, {});
+      c.startListen();
+      this._capabilitiesRegistry = new LspCapabilitiesRegistry(c);
+      this._bridge = new TextDocumentSynchronizer(s.server, this._capabilitiesRegistry);
+      this._connection = new LspConnection(s.server, this._bridge, this._capabilitiesRegistry, c);
+      this.createFeatures();
+      this._initPromise = this._init();
+    }
+    async _init() {
+      const result = await this._connection.server.initialize({
+        processId: null,
+        capabilities: this._capabilitiesRegistry.getClientCapabilities(),
+        rootUri: null
+      });
+      this._connection.server.initialized({});
+      this._capabilitiesRegistry.setServerCapabilities(result.capabilities);
+    }
+    createFeatures() {
+      const store = new DisposableStore();
+      store.add(new LspCompletionFeature(this._connection));
+      store.add(new LspHoverFeature(this._connection));
+      store.add(new LspSignatureHelpFeature(this._connection));
+      store.add(new LspDefinitionFeature(this._connection));
+      store.add(new LspDeclarationFeature(this._connection));
+      store.add(new LspTypeDefinitionFeature(this._connection));
+      store.add(new LspImplementationFeature(this._connection));
+      store.add(new LspReferencesFeature(this._connection));
+      store.add(new LspDocumentHighlightFeature(this._connection));
+      store.add(new LspDocumentSymbolFeature(this._connection));
+      store.add(new LspRenameFeature(this._connection));
+      store.add(new LspCodeActionFeature(this._connection));
+      store.add(new LspCodeLensFeature(this._connection));
+      store.add(new LspDocumentLinkFeature(this._connection));
+      store.add(new LspFormattingFeature(this._connection));
+      store.add(new LspRangeFormattingFeature(this._connection));
+      store.add(new LspOnTypeFormattingFeature(this._connection));
+      store.add(new LspFoldingRangeFeature(this._connection));
+      store.add(new LspSelectionRangeFeature(this._connection));
+      store.add(new LspInlayHintsFeature(this._connection));
+      store.add(new LspSemanticTokensFeature(this._connection));
+      store.add(new LspDiagnosticsFeature(this._connection));
+      return store;
+    }
+  };
+  var ws = null;
+  if (typeof WebSocket !== "undefined") ws = WebSocket;
+  else if (typeof MozWebSocket !== "undefined") ws = MozWebSocket;
+  else if (typeof global !== "undefined") ws = global.WebSocket || global.MozWebSocket;
+  else if (typeof window !== "undefined") ws = window.WebSocket || window.MozWebSocket;
+  else if (typeof self !== "undefined") ws = self.WebSocket || self.MozWebSocket;
+  var browser_default = ws;
+  function normalizeWebSocketOptions(options) {
+    if ("host" in options) return { address: `${options.forceTls ? "wss" : "ws"}://${options.host}:${options.port}` };
+    else return options;
+  }
+  var WebSocketTransport = class WebSocketTransport2 extends BaseMessageTransport {
+    socket;
+    static connectTo(options) {
+      const ws$1 = new browser_default(normalizeWebSocketOptions(options).address);
+      return new Promise((res, rej) => {
+        ws$1.onerror = (err) => {
+          rej(err);
+        };
+        ws$1.onopen = () => {
+          res(new WebSocketTransport2(ws$1));
+        };
+      });
+    }
+    static fromWebSocket(socket) {
+      return new WebSocketTransport2(socket);
+    }
+    errorEmitter = new EventEmitter();
+    onError = this.errorEmitter;
+    constructor(socket) {
+      super();
+      this.socket = socket;
+      socket.onmessage = (msg) => {
+        try {
+          const data = msg.data;
+          if (typeof data === "string") {
+            const json = JSON.parse(data);
+            this._dispatchReceivedMessage(json);
+          } else throw new Error("Not supported");
+        } catch (error) {
+          this.errorEmitter.fire({ error });
+        }
+      };
+      socket.onclose = (_event) => {
+        this._onConnectionClosed();
+      };
+    }
+    /**
+    * Closes the underlying socket.
+    */
+    close() {
+      this.socket.close();
+    }
+    /**
+    * Same as `close`.
+    */
+    dispose() {
+      this.close();
+    }
+    _sendImpl(message) {
+      const str = JSON.stringify(message);
+      return new Promise((res, rej) => {
+        this.socket.send(str, (err) => {
+          if (err) rej(err);
+          else res();
+        });
+      });
+    }
+    toString() {
+      return `${this.id}@${this.socket.url}`;
+    }
+  };
+  var WindowLikeTransport = class extends BaseMessageTransport {
+    _windowLike;
+    _source;
+    _loadingState;
+    _disposed = false;
+    constructor(_windowLike, _source = void 0, _loadingState = void 0) {
+      super();
+      this._windowLike = _windowLike;
+      this._source = _source;
+      this._loadingState = _loadingState;
+      this._windowLike.addEventListener("message", this._messageHandler);
+    }
+    _messageHandler = ({ data, source }) => {
+      if (this._source && source !== this._source) return;
+      if (typeof data === "object" && data) this._dispatchReceivedMessage(data);
+    };
+    async _sendImpl(message) {
+      if (this._disposed) throw new Error("Transport is disposed");
+      if (this._loadingState && !this._loadingState.loaded) await this._loadingState.onLoaded;
+      this._windowLike.postMessage(message);
+    }
+    toString() {
+      return `${this.id}@${this._windowLike}`;
+    }
+    dispose() {
+      if (this._disposed) return;
+      this._disposed = true;
+      this._windowLike.removeEventListener("message", this._messageHandler);
+    }
+  };
+  function createTransportToWorker(worker) {
+    if (typeof window === "undefined") throw new Error(`call this function from the main browser thread`);
+    return new WindowLikeTransport(worker);
+  }
+  function createTransportToIFrame(iframe) {
+    if (typeof window === "undefined") throw new Error(`call this function from the main browser thread`);
+    return new WindowLikeTransport(iframe.contentWindow, iframe.contentWindow, {
+      loaded: window.document.readyState === "complete",
+      onLoaded: new Promise((res) => {
+        window.addEventListener("load", () => res());
+      })
+    });
+  }
+  const index = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+    __proto__: null,
+    MonacoLspClient,
+    WebSocketTransport,
+    createTransportToIFrame,
+    createTransportToWorker
+  }, Symbol.toStringTag, { value: "Module" }));
+  function getGlobalMonaco() {
+    return editor_api.monaco;
+  }
+  const monacoEnvironment = globalThis.MonacoEnvironment;
+  if (monacoEnvironment?.globalAPI) {
+    globalThis.monaco = getGlobalMonaco();
+  }
+  const monacoApi = getGlobalMonaco();
+  monacoApi.languages.css = language_css_monaco_contribution.monaco_contribution;
+  monacoApi.languages.html = language_html_monaco_contribution.monaco_contribution;
+  monacoApi.languages.typescript = language_typescript_monaco_contribution.monaco_contribution;
+  monacoApi.languages.json = language_json_monaco_contribution.monaco_contribution;
+  const monaco = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+    __proto__: null,
+    CancellationTokenSource: editor_api.CancellationTokenSource,
+    Emitter: editor_api.Emitter,
+    KeyCode: editor_api.KeyCode,
+    KeyMod: editor_api.KeyMod,
+    MarkerSeverity: editor_api.MarkerSeverity,
+    MarkerTag: editor_api.MarkerTag,
+    Position: editor_api.Position,
+    Range: editor_api.Range,
+    Selection: editor_api.Selection,
+    SelectionDirection: editor_api.SelectionDirection,
+    Token: editor_api.Token,
+    Uri: editor_api.Uri,
+    createWebWorker: workers.createWebWorker,
+    css: language_css_monaco_contribution.monaco_contribution,
+    editor: editor_api.editor,
+    html: language_html_monaco_contribution.monaco_contribution,
+    json: language_json_monaco_contribution.monaco_contribution,
+    languages: editor_api.languages,
+    lsp: index,
+    typescript: language_typescript_monaco_contribution.monaco_contribution
+  }, Symbol.toStringTag, { value: "Module" }));
+  if (typeof globalThis.require !== "undefined" && typeof globalThis.require.config === "function") {
+    globalThis.require.config({
+      ignoreDuplicateModules: [
+        "vscode-languageserver-types",
+        "vscode-languageserver-types/main",
+        "vscode-languageserver-textdocument",
+        "vscode-languageserver-textdocument/main",
+        "vscode-nls",
+        "vscode-nls/vscode-nls",
+        "jsonc-parser",
+        "jsonc-parser/main",
+        "vscode-uri",
+        "vscode-uri/index",
+        "vs/basic-languages/typescript/typescript"
+      ]
+    });
+  }
+  self.MonacoEnvironment = {
+    getWorker: function(_moduleId, label) {
+      if (label === "json") {
+        return new Worker(
+          getWorkerBootstrapUrl(
+            /// @ts-ignore
+            __worker_url_0__
+          )
+        );
+      }
+      if (label === "css" || label === "scss" || label === "less") {
+        return new Worker(
+          getWorkerBootstrapUrl(
+            /// @ts-ignore
+            __worker_url_1__
+          )
+        );
+      }
+      if (label === "html" || label === "handlebars" || label === "razor") {
+        return new Worker(
+          getWorkerBootstrapUrl(
+            /// @ts-ignore
+            __worker_url_2__
+          )
+        );
+      }
+      if (label === "typescript" || label === "javascript") {
+        return new Worker(
+          getWorkerBootstrapUrl(
+            /// @ts-ignore
+            __worker_url_3__
+          )
+        );
+      }
+      return new Worker(
+        /// @ts-ignore
+        getWorkerBootstrapUrl(__worker_url_4__)
+      );
+    }
+  };
+  function getWorkerBootstrapUrl(workerScriptUrl) {
+    if (typeof workerScriptUrl !== "string") {
+      workerScriptUrl = workerScriptUrl.toString();
+    }
+    const blob = new Blob(
+      [
+        [
+          `const ttPolicy = globalThis.trustedTypes?.createPolicy('defaultWorkerFactory', { createScriptURL: value => value });`,
+          `globalThis.workerttPolicy = ttPolicy;`,
+          `importScripts(ttPolicy?.createScriptURL(${JSON.stringify(
+            workerScriptUrl
+          )}) ?? ${JSON.stringify(workerScriptUrl)});`,
+          `globalThis.postMessage({ type: 'vscode-worker-ready' });`
+        ].join("")
+      ],
+      { type: "application/javascript" }
+    );
+    return URL.createObjectURL(blob);
+  }
+  globalThis.monaco = monaco;
+  const styleSheetUrl = require__namespace.toUrl("vs/editor/editor.main.css");
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = styleSheetUrl;
+  document.head.appendChild(link);
+  exports.css = language_css_monaco_contribution.monaco_contribution;
+  exports.html = language_html_monaco_contribution.monaco_contribution;
+  exports.json = language_json_monaco_contribution.monaco_contribution;
+  exports.typescript = language_typescript_monaco_contribution.monaco_contribution;
+  exports.CancellationTokenSource = editor_api.CancellationTokenSource;
+  exports.Emitter = editor_api.Emitter;
+  exports.KeyCode = editor_api.KeyCode;
+  exports.KeyMod = editor_api.KeyMod;
+  exports.MarkerSeverity = editor_api.MarkerSeverity;
+  exports.MarkerTag = editor_api.MarkerTag;
+  exports.Position = editor_api.Position;
+  exports.Range = editor_api.Range;
+  exports.Selection = editor_api.Selection;
+  exports.SelectionDirection = editor_api.SelectionDirection;
+  exports.Token = editor_api.Token;
+  exports.Uri = editor_api.Uri;
+  exports.editor = editor_api.editor;
+  exports.languages = editor_api.languages;
+  exports.createWebWorker = workers.createWebWorker;
+  exports.lsp = index;
+  Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
+}));
