@@ -110,4 +110,7 @@ interface ScriptDao {
 
     @Query("UPDATE scripts SET entryPoint = :entryPoint WHERE name = :name")
     suspend fun updateEntryPoint(name: String, entryPoint: String)
+
+    @Query("UPDATE scripts SET name = :newName WHERE name = :oldName")
+    suspend fun updateName(oldName: String, newName: String)
 }

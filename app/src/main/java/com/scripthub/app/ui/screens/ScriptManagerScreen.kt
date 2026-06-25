@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.MoreVert
@@ -66,6 +67,8 @@ fun ScriptManagerScreen(
     var activeTerminalScript  by remember { mutableStateOf<ScriptEntity?>(null) }
     var activeLogViewerScript by remember { mutableStateOf<ScriptEntity?>(null) }
     var scriptPendingDelete   by remember { mutableStateOf<ScriptEntity?>(null) }
+    var scriptPendingEdit     by remember { mutableStateOf<ScriptEntity?>(null) }
+    var editFolderName        by remember { mutableStateOf("") }
     var isFabExpanded         by remember { mutableStateOf(false) }
 
     var isRefreshing by remember { mutableStateOf(false) }
@@ -123,7 +126,7 @@ fun ScriptManagerScreen(
                             onClick = {
                                 isFabExpanded    = false
                                 folderName       = ""
-                                folderEntryPoint = "main.py"
+                                folderEntryPoint = "index.js"
                                 showFolderDialog = true
                             }
                         )
@@ -229,7 +232,11 @@ fun ScriptManagerScreen(
                                     onExecuteNow    = { activeTerminalScript = script },
                                     onOpenDetail    = { onOpenDetail(script) },
                                     onViewLogs      = { activeLogViewerScript = script },
-                                    onDeleteRequest = { scriptPendingDelete = script }
+                                    onDeleteRequest = { scriptPendingDelete = script },
+                                    onEditRequest   = {
+                                        editFolderName    = script.name
+                                        scriptPendingEdit = script
+                                    }
                                 )
                             }
                         }
@@ -333,6 +340,14 @@ fun ScriptManagerScreen(
         )
     }
 
+    val folderDetectedType = remember(folderEntryPoint) {
+        val ext = folderEntryPoint.substringAfterLast(".", "").lowercase()
+        when {
+            ext == "js" || ext == "mjs" || ext == "cjs" -> "Node.js"
+            else -> null
+        }
+    }
+
     if (showFolderDialog) {
         AlertDialog(
             onDismissRequest = { showFolderDialog = false },
@@ -346,16 +361,43 @@ fun ScriptManagerScreen(
                         label         = { Text("工程文件夹名称") },
                         placeholder   = { Text("例如: auto_task_hub") },
                         singleLine    = true,
-                        shape         = RoundedCornerShape(12.dp)
+                        shape         = RoundedCornerShape(12.dp),
+                        modifier      = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value         = folderEntryPoint,
                         onValueChange = { folderEntryPoint = it.trim() },
                         label         = { Text("入口执行文件名") },
-                        placeholder   = { Text("例如: main.py 或 index.js") },
+                        placeholder   = { Text("例如: index.js 或 main.py") },
                         singleLine    = true,
-                        shape         = RoundedCornerShape(12.dp)
+                        shape         = RoundedCornerShape(12.dp),
+                        modifier      = Modifier.fillMaxWidth()
                     )
+                    if (folderDetectedType != null) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Row(
+                                modifier             = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment    = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Folder,
+                                    contentDescription = null,
+                                    tint     = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    "检测到 $folderDetectedType 项目，将自动初始化 package.json",
+                                    style    = MaterialTheme.typography.labelSmall,
+                                    color    = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -370,6 +412,43 @@ fun ScriptManagerScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showFolderDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    scriptPendingEdit?.let { target ->
+        AlertDialog(
+            onDismissRequest = { scriptPendingEdit = null },
+            shape = RoundedCornerShape(24.dp),
+            title = { Text("编辑项目", fontWeight = FontWeight.Bold) },
+            text  = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "修改项目文件夹名称：",
+                        fontSize = 12.sp,
+                        color    = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value         = editFolderName,
+                        onValueChange = { editFolderName = it.trim() },
+                        label         = { Text("文件夹名称") },
+                        singleLine    = true,
+                        shape         = RoundedCornerShape(12.dp),
+                        modifier      = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick  = {
+                        viewModel.renameProject(target, editFolderName)
+                        scriptPendingEdit = null
+                    },
+                    enabled  = editFolderName.isNotBlank() && editFolderName != target.name
+                ) { Text("保存") }
+            },
+            dismissButton = {
+                TextButton(onClick = { scriptPendingEdit = null }) { Text("取消") }
             }
         )
     }
@@ -507,6 +586,7 @@ fun ScriptCard(
     onOpenDetail: () -> Unit = {},
     onViewLogs: () -> Unit = {},
     onDeleteRequest: () -> Unit = {},
+    onEditRequest: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -662,6 +742,13 @@ fun ScriptCard(
                                 leadingIcon = { Icon(Icons.Default.History, null) },
                                 onClick     = { showMoreMenu = false; onViewLogs() }
                             )
+                            if (script.isFolder) {
+                                DropdownMenuItem(
+                                    text        = { Text("编辑项目信息") },
+                                    leadingIcon = { Icon(Icons.Default.Edit, null) },
+                                    onClick     = { showMoreMenu = false; onEditRequest() }
+                                )
+                            }
                             HorizontalDivider()
                             DropdownMenuItem(
                                 text        = { Text("删除脚本", color = MaterialTheme.colorScheme.error) },

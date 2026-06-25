@@ -34,22 +34,12 @@ class ScriptViewModel(application: Application) : AndroidViewModel(application) 
             FileHelper.initDirectories()
             val physicalItems = FileHelper.scanPhysicalScripts()
 
-            // 2.1 补全数据库中缺失的物理文件记录
+            // 2.1 补全数据库中缺失的物理文件记录，并同步已有记录的 entryPoint
             for (pItem in physicalItems) {
                 val dbItem = dao.getByName(pItem.name)
                 if (dbItem == null) {
-                    val scriptType = when {
-                        pItem.name.endsWith(".py") || pItem.entryPoint.endsWith(".py") -> "Python"
-                        pItem.name.endsWith(".js") || pItem.entryPoint.endsWith(".js") -> "Node.js"
-                        pItem.name.endsWith(".sh") || pItem.entryPoint.endsWith(".sh") -> "Shell"
-                        else -> "Other"
-                    }
-                    val colorHex = when(scriptType) {
-                        "Python" -> "#38BDF8"
-                        "Node.js" -> "#A855F7"
-                        "Shell" -> "#22C55E"
-                        else -> "#94A3B8"
-                    }
+                    val scriptType = inferScriptType(pItem)
+                    val colorHex = typeToColorHex(scriptType)
                     dao.insert(
                         ScriptEntity(
                             name = pItem.name,
@@ -59,6 +49,8 @@ class ScriptViewModel(application: Application) : AndroidViewModel(application) 
                             themeColorHex = colorHex
                         )
                     )
+                } else if (pItem.isFolder && pItem.entryPoint.isNotBlank() && dbItem.entryPoint != pItem.entryPoint) {
+                    dao.updateEntryPoint(pItem.name, pItem.entryPoint)
                 }
             }
 
@@ -98,5 +90,40 @@ class ScriptViewModel(application: Application) : AndroidViewModel(application) 
             }
             syncFilesWithDatabase()
         }
+    }
+
+    // 重命名工程项目文件夹
+    fun renameProject(script: ScriptEntity, newName: String) {
+        if (newName.isBlank() || newName == script.name) return
+        viewModelScope.launch {
+            val success = withContext(Dispatchers.IO) {
+                FileHelper.renameFolderProject(script.name, newName)
+            }
+            if (success) {
+                withContext(Dispatchers.IO) {
+                    dao.updateName(script.name, newName)
+                }
+                syncFilesWithDatabase()
+            }
+        }
+    }
+
+    private fun inferScriptType(pItem: FileHelper.PhysicalItem): String {
+        val nodeExts = setOf("js", "mjs", "cjs")
+        val entryExt = pItem.entryPoint.substringAfterLast(".", "").lowercase()
+        val nameExt  = pItem.name.substringAfterLast(".", "").lowercase()
+        return when {
+            entryExt in nodeExts || nameExt in nodeExts -> "Node.js"
+            entryExt == "py"     || nameExt == "py"     -> "Python"
+            entryExt == "sh"     || nameExt == "sh"     -> "Shell"
+            else -> "Other"
+        }
+    }
+
+    private fun typeToColorHex(type: String): String = when (type) {
+        "Python"  -> "#38BDF8"
+        "Node.js" -> "#A855F7"
+        "Shell"   -> "#22C55E"
+        else      -> "#94A3B8"
     }
 }

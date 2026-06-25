@@ -219,7 +219,7 @@ fun MainScreen() {
 
     // ─── 正常 App 主体 ───
     val titleText = when (currentRoute) {
-        "Dashboard"      -> "仪表盘"
+        "Dashboard"      -> "Script Hub"
         "ScriptManager"  -> "脚本管理"
         "ScheduledTasks" -> "定时任务"
         "Settings"       -> "配置中心"

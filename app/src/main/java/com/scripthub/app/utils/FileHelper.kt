@@ -81,10 +81,36 @@ object FileHelper {
             val folder = File(scriptsDir, folderName)
             if (!folder.exists()) folder.mkdirs()
             val entryFile = File(folder, entryPoint)
-            if (!entryFile.exists()) entryFile.createNewFile() else false
+            if (!entryFile.exists()) entryFile.createNewFile()
+            val ext = entryPoint.substringAfterLast(".", "").lowercase()
+            if (ext == "js" || ext == "mjs" || ext == "cjs") {
+                val packageJson = File(folder, "package.json")
+                if (!packageJson.exists()) {
+                    packageJson.writeText(
+                        "{\n" +
+                        "  \"name\": \"$folderName\",\n" +
+                        "  \"version\": \"1.0.0\",\n" +
+                        "  \"description\": \"\",\n" +
+                        "  \"main\": \"$entryPoint\",\n" +
+                        "  \"scripts\": {\n" +
+                        "    \"start\": \"node $entryPoint\"\n" +
+                        "  }\n" +
+                        "}"
+                    )
+                }
+            }
+            true
         } catch (e: Exception) {
             false
         }
+    }
+
+    fun renameFolderProject(oldName: String, newName: String): Boolean {
+        return try {
+            val src = File(scriptsDir, oldName)
+            val dst = File(scriptsDir, newName)
+            if (src.exists() && !dst.exists()) src.renameTo(dst) else false
+        } catch (e: Exception) { false }
     }
 
     fun deletePhysicalItem(name: String): Boolean {
@@ -132,6 +158,15 @@ object FileHelper {
     }
 
     private fun detectEntryPoint(folder: File): String {
+        val packageJson = File(folder, "package.json")
+        if (packageJson.exists()) {
+            try {
+                val text = packageJson.readText()
+                val mainMatch = Regex("\"main\"\\s*:\\s*\"([^\"]+)\"").find(text)
+                val main = mainMatch?.groupValues?.getOrNull(1)
+                if (!main.isNullOrBlank()) return main
+            } catch (_: Exception) {}
+        }
         val candidates = listOf("main.py", "index.js", "main.js", "server.js", "crawl.py")
         for (c in candidates) {
             if (File(folder, c).exists()) return c
