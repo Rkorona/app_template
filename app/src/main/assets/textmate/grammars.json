@@ -1,0 +1,22 @@
+{
+  "grammars": [
+    {
+      "name": "JavaScript",
+      "scopeName": "source.js",
+      "path": "textmate/javascript.tmLanguage.json",
+      "embeddedLanguages": {}
+    },
+    {
+      "name": "Python",
+      "scopeName": "source.python",
+      "path": "textmate/python.tmLanguage.json",
+      "embeddedLanguages": {}
+    },
+    {
+      "name": "Shell Script",
+      "scopeName": "source.shell",
+      "path": "textmate/shell.tmLanguage.json",
+      "embeddedLanguages": {}
+    }
+  ]
+}
