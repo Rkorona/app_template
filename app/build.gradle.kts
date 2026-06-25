@@ -114,4 +114,6 @@ dependencies {
     implementation(platform("io.github.rosemoe:editor-bom:0.24.6"))
     implementation("io.github.rosemoe:editor")
     implementation("io.github.rosemoe:language-textmate")
+    implementation("io.github.rosemoe:editor-lsp")
+    implementation("io.github.rosemoe:language-treesitter")
 }
