@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import io.github.rosemoe.sora.event.ContentChangeEvent
+import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
 import io.github.rosemoe.sora.langs.textmate.registry.FileProviderRegistry
@@ -39,12 +40,10 @@ private suspend fun ensureTextMateReady(context: Context) {
     withContext(Dispatchers.IO) {
         if (tmReady || tmFailed) return@withContext
         try {
-            // 1. 注册 Assets 文件解析器（FileProviderRegistry 负责解析所有 textmate 路径）
             FileProviderRegistry.getInstance().addFileProvider(
                 AssetsFileResolver(context.applicationContext.assets)
             )
 
-            // 2. 加载主题（深色 / 浅色）
             val themeRegistry = ThemeRegistry.getInstance()
             for ((name, isDark) in listOf("sora_dark" to true, "sora_light" to false)) {
                 val path = "textmate/$name.json"
@@ -62,8 +61,6 @@ private suspend fun ensureTextMateReady(context: Context) {
                 )
             }
 
-            // 3. 加载语法文件清单
-            // 注意：格式必须是 {"languages":[{"name":"...","scopeName":"...","grammar":"..."}]}
             GrammarRegistry.getInstance().loadGrammars("textmate/grammars.json")
 
             tmReady = true
@@ -103,6 +100,7 @@ private fun applyLanguage(editor: CodeEditor, scopeName: String?) {
  * @param scopeName       TextMate scope，如 "source.js"，null 表示纯文本
  * @param onEditorReady   编辑器实例回调，保存时通过 editor.text.toString() 读取内容
  * @param onStats         每次内容变化时回调行数/字符数
+ * @param onCursor        光标移动时回调 (行号从1开始, 列号从1开始)
  */
 @Composable
 fun SoraEditorView(
@@ -110,6 +108,7 @@ fun SoraEditorView(
     scopeName: String?,
     onEditorReady: (CodeEditor) -> Unit = {},
     onStats: (lines: Int, chars: Int) -> Unit = { _, _ -> },
+    onCursor: (line: Int, col: Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -119,7 +118,7 @@ fun SoraEditorView(
 
     LaunchedEffect(Unit) {
         ensureTextMateReady(context)
-        isReady = true  // tmFailed 时也进入 ready 状态（editor 以无语法模式显示）
+        isReady = true
     }
 
     if (!isReady) {
@@ -150,6 +149,10 @@ fun SoraEditorView(
 
                 editor.subscribeEvent(ContentChangeEvent::class.java) { _, _ ->
                     onStats(editor.lineCount, editor.text.length)
+                }
+                editor.subscribeEvent(SelectionChangeEvent::class.java) { _, _ ->
+                    val cursor = editor.cursor
+                    onCursor(cursor.leftLine + 1, cursor.leftColumn + 1)
                 }
                 onEditorReady(editor)
             }

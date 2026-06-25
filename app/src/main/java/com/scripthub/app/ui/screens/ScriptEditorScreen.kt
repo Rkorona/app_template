@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.scripthub.app.ui.components.FolderFileBrowserSheet
 import com.scripthub.app.ui.components.SoraEditorView
 import com.scripthub.app.ui.components.TerminalConsoleBottomSheet
 import com.scripthub.app.utils.FileHelper
@@ -40,6 +41,7 @@ enum class EditorLang(val label: String, val scopeName: String?) {
     JAVASCRIPT("JavaScript", "source.js"),
     PYTHON("Python",         "source.python"),
     SHELL("Shell",           "source.shell"),
+    JSON("JSON",             "source.json"),
     PLAIN("Text",            null)
 }
 
@@ -48,6 +50,7 @@ private fun detectLang(name: String): EditorLang = when {
     name.endsWith(".sh",   true) || name.endsWith(".bash", true)         -> EditorLang.SHELL
     name.endsWith(".js",   true) || name.endsWith(".mjs", true) ||
     name.endsWith(".cjs",  true) || name.endsWith(".ts",  true)          -> EditorLang.JAVASCRIPT
+    name.endsWith(".json", true)                                          -> EditorLang.JSON
     else                                                                  -> EditorLang.PLAIN
 }
 
@@ -55,10 +58,6 @@ private fun detectLang(name: String): EditorLang = when {
 // 工具栏按钮 — 重新设计
 // ──────────────────────────────────────────────────────────────────
 
-/**
- * 普通工具栏按钮：图标 + 标签，无背景，onSurfaceVariant 色调。
- * 只有 Run 按钮走 [RunToolbarAction] 获得填充容器高亮。
- */
 @Composable
 private fun ToolbarAction(
     icon:    ImageVector,
@@ -95,10 +94,6 @@ private fun ToolbarAction(
     }
 }
 
-/**
- * 运行按钮：M3 Expressive 风格 — 图标放在 primaryContainer 圆角胶囊中，
- * 文字用 primary 色，与普通按钮形成层级感，但不破坏整体节奏。
- */
 @Composable
 private fun RunToolbarAction(
     enabled: Boolean = true,
@@ -150,14 +145,14 @@ private fun RunToolbarAction(
 }
 
 // ──────────────────────────────────────────────────────────────────
-// 代码键盘按键 — 重新设计（M3 Expressive 键帽样式）
+// 代码键盘按键
 // ──────────────────────────────────────────────────────────────────
 
 @Composable
 private fun CodeKey(
     label:    String,
     wide:     Boolean  = false,
-    special:  Boolean  = false,   // fn / ⊞ 等功能键
+    special:  Boolean  = false,
     onClick:  () -> Unit
 ) {
     val colors     = MaterialTheme.colorScheme
@@ -168,7 +163,6 @@ private fun CodeKey(
         onClick = onClick,
         shape   = RoundedCornerShape(7.dp),
         color   = bgColor,
-        shadowElevation = if (special) 0.dp else 0.dp,
         modifier = Modifier
             .height(34.dp)
             .then(if (wide) Modifier.width(54.dp) else Modifier.widthIn(min = 40.dp))
@@ -224,10 +218,13 @@ fun ScriptEditorScreen(
     var isFileLoaded   by remember { mutableStateOf(false) }
     var isSaving       by remember { mutableStateOf(false) }
     var showTerminal   by remember { mutableStateOf(false) }
+    var showFileBrowser by remember { mutableStateOf(false) }
     val editorRef      = remember { mutableStateOf<CodeEditor?>(null) }
 
-    var lineCount by remember { mutableIntStateOf(1) }
-    var charCount by remember { mutableIntStateOf(0) }
+    var lineCount   by remember { mutableIntStateOf(1) }
+    var charCount   by remember { mutableIntStateOf(0) }
+    var cursorLine  by remember { mutableIntStateOf(1) }
+    var cursorCol   by remember { mutableIntStateOf(1) }
 
     // ── 文件加载 ────────────────────────────────────────────────────
     LaunchedEffect(fileName, entryPoint) {
@@ -278,7 +275,6 @@ fun ScriptEditorScreen(
 
         // ── TopBar：工具栏 + 文件标签 ─────────────────────────────────
         topBar = {
-            // M3: surfaceContainer 比 surface 更有层次感，替代旧的 shadowElevation
             Surface(
                 color          = colors.surfaceContainer,
                 tonalElevation = 0.dp
@@ -291,9 +287,19 @@ fun ScriptEditorScreen(
                             .fillMaxWidth()
                             .statusBarsPadding()
                     ) {
-                        // 左组：文件 编辑 调试 终端 其他
-                        Row(modifier = Modifier.weight(1f)) {
-                            ToolbarAction(Icons.Default.FolderOpen, "文件") { onBack() }
+                        // 左组：可横向滚动，避免按钮被挤压
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .horizontalScroll(rememberScrollState())
+                        ) {
+                            ToolbarAction(Icons.Default.FolderOpen, "文件") {
+                                if (isFolder) {
+                                    showFileBrowser = true
+                                } else {
+                                    Toast.makeText(context, "单文件模式，无工作区", Toast.LENGTH_SHORT).show()
+                                }
+                            }
                             ToolbarAction(Icons.Default.Edit, "编辑") {
                                 Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                             }
@@ -339,7 +345,6 @@ fun ScriptEditorScreen(
                     HorizontalDivider(color = colors.outlineVariant)
 
                     // ── 文件标签行 ───────────────────────────────────
-                    // 设计：filename 标签 + primary 下划线；右侧单行显示「Ln X · LANG」
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier          = Modifier
@@ -347,10 +352,7 @@ fun ScriptEditorScreen(
                             .padding(start = 14.dp, end = 12.dp)
                             .height(38.dp)
                     ) {
-                        // 文件名 + 下划线（与 image 1 参考一致）
-                        Column(
-                            modifier = Modifier.wrapContentWidth()
-                        ) {
+                        Column(modifier = Modifier.wrapContentWidth()) {
                             Text(
                                 text       = displayName,
                                 style      = MaterialTheme.typography.bodyMedium,
@@ -359,7 +361,6 @@ fun ScriptEditorScreen(
                                 color      = colors.onSurface,
                                 modifier   = Modifier.padding(top = 6.dp, bottom = 3.dp)
                             )
-                            // primary 色下划线，宽度与文字自动匹配
                             Box(
                                 modifier = Modifier
                                     .wrapContentWidth(Alignment.Start)
@@ -367,7 +368,6 @@ fun ScriptEditorScreen(
                                     .clip(RoundedCornerShape(1.dp))
                                     .background(colors.primary)
                             ) {
-                                // 透明文字撑开宽度
                                 Text(
                                     text       = displayName,
                                     style      = MaterialTheme.typography.bodyMedium,
@@ -380,7 +380,6 @@ fun ScriptEditorScreen(
 
                         Spacer(Modifier.weight(1f))
 
-                        // 右侧：单行「Ln X · LANG」—— 比原来的竖排更紧凑
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
@@ -391,13 +390,11 @@ fun ScriptEditorScreen(
                                 fontFamily = FontFamily.Monospace,
                                 color      = colors.onSurfaceVariant
                             )
-                            // 点分隔
                             Text(
                                 text  = "·",
                                 fontSize = 10.sp,
                                 color = colors.outlineVariant
                             )
-                            // 语言标签：小型 outlined 胶囊，比纯文字更有层次
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
                                 color = colors.primaryContainer.copy(alpha = 0.6f)
@@ -419,13 +416,60 @@ fun ScriptEditorScreen(
             }
         },
 
-        // ── BottomBar：代码键盘（M3 Expressive 键帽样式）────────────────
+        // ── BottomBar：状态栏 + 代码键盘 ─────────────────────────────
         bottomBar = {
             Surface(color = colors.surfaceContainerLow) {
                 Column(modifier = Modifier.navigationBarsPadding()) {
+
+                    // ── 状态栏 ──────────────────────────────────────
+                    HorizontalDivider(color = colors.outlineVariant)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(28.dp)
+                            .padding(horizontal = 12.dp)
+                    ) {
+                        // 左侧：光标位置
+                        Text(
+                            text       = "Ln $cursorLine, Col $cursorCol",
+                            fontSize   = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color      = colors.onSurfaceVariant
+                        )
+                        Text(
+                            text     = "  ·  ",
+                            fontSize = 10.sp,
+                            color    = colors.outlineVariant
+                        )
+                        Text(
+                            text       = "$charCount 字符",
+                            fontSize   = 10.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color      = colors.onSurfaceVariant
+                        )
+
+                        Spacer(Modifier.weight(1f))
+
+                        // 右侧：语言标签
+                        Surface(
+                            shape = RoundedCornerShape(3.dp),
+                            color = colors.surfaceContainerHigh
+                        ) {
+                            Text(
+                                text       = lang.label,
+                                fontSize   = 9.5.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Medium,
+                                color      = colors.onSurfaceVariant,
+                                modifier   = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
                     HorizontalDivider(color = colors.outlineVariant)
 
-                    // ── 第一行：fn / ESC / ↑ / TAB + 常用符号 ──────────
+                    // ── 第一行：常用符号（去掉 fn/ESC/↑/TAB）──────
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically,
@@ -434,16 +478,6 @@ fun ScriptEditorScreen(
                             .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        CodeKey("fn",  wide = true, special = true) {
-                            Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
-                        }
-                        CodeKey("ESC", wide = true, special = true) {
-                            val imm = context.getSystemService(InputMethodManager::class.java)
-                            imm.hideSoftInputFromWindow(editorRef.value?.windowToken, 0)
-                        }
-                        CodeKey("↑",   special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
-                        CodeKey("TAB", wide = true, special = true) { editorRef.value?.typeText("    ") }
-
                         listOf("(", ")", "/", "=", ",", ";", "\"", "'").forEach { sym ->
                             CodeKey(sym) { editorRef.value?.typeText(sym) }
                         }
@@ -451,7 +485,7 @@ fun ScriptEditorScreen(
 
                     HorizontalDivider(color = colors.outlineVariant)
 
-                    // ── 第二行：⊞ / 光标 + 括号符号 ─────────────────────
+                    // ── 第二行：光标导航 + 括号符号 ──────────────────
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically,
@@ -460,10 +494,8 @@ fun ScriptEditorScreen(
                             .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        CodeKey("⊞",  wide = true, special = true) {
-                            Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
-                        }
                         CodeKey("←",  special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_LEFT) }
+                        CodeKey("↑",  special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_UP) }
                         CodeKey("↓",  special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_DOWN) }
                         CodeKey("→",  special = true) { editorRef.value?.sendKey(KeyEvent.KEYCODE_DPAD_RIGHT) }
 
@@ -501,6 +533,7 @@ fun ScriptEditorScreen(
                 scopeName      = lang.scopeName,
                 onEditorReady  = { editor -> editorRef.value = editor },
                 onStats        = { lines, chars -> lineCount = lines; charCount = chars },
+                onCursor       = { line, col -> cursorLine = line; cursorCol = col },
                 modifier       = Modifier
                     .fillMaxSize()
                     .padding(innerPadding)
@@ -513,6 +546,16 @@ fun ScriptEditorScreen(
             taskName   = fileName,
             scriptName = if (isFolder) entryPoint else fileName,
             onDismiss  = { showTerminal = false }
+        )
+    }
+
+    if (showFileBrowser && isFolder) {
+        FolderFileBrowserSheet(
+            folderName          = fileName,
+            entryPoint          = entryPoint,
+            onDismiss           = { showFileBrowser = false },
+            onSelectFile        = { showFileBrowser = false },
+            onEntryPointChanged = {}
         )
     }
 }
