@@ -609,11 +609,10 @@ fun ScriptEditorScreen(
                     onStats            = { lines, chars -> lineCount = lines; charCount = chars },
                     onCursor           = { line, col -> cursorLine = line; cursorCol = col },
                     onSelectionChanged = { has, text -> hasSelection = has; selectedText = text },
-                    onTap              = {
-                        if (!hasSelection) {
-                            showPasteBubbleManually = !showPasteBubbleManually
-                            if (showPasteBubbleManually) { offsetX = 0f; offsetY = 120f }
-                        }
+                    onLongPressEmpty   = {
+                        showPasteBubbleManually = true
+                        offsetX = 0f
+                        offsetY = 120f
                     },
                     modifier           = Modifier.fillMaxSize()
                 )

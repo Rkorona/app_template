@@ -133,7 +133,7 @@ private class MonacoBridge(
     private val onReady: () -> Unit,
     private val onError: (String) -> Unit,
     private val onSelectionChanged: (hasSelection: Boolean, selectedText: String) -> Unit = { _, _ -> },
-    private val onTap: () -> Unit = {}
+    private val onLongPressEmpty: () -> Unit = {}
 ) {
     private val main = Handler(Looper.getMainLooper())
 
@@ -174,8 +174,8 @@ private class MonacoBridge(
     }
 
     @JavascriptInterface
-    fun onTap() {
-        main.post { onTap.invoke() }
+    fun onLongPressEmpty() {
+        main.post { onLongPressEmpty.invoke() }
     }
 }
 
@@ -201,7 +201,7 @@ fun MonacoEditorView(
     onStats: (lines: Int, chars: Int) -> Unit = { _, _ -> },
     onCursor: (line: Int, col: Int) -> Unit = { _, _ -> },
     onSelectionChanged: (hasSelection: Boolean, selectedText: String) -> Unit = { _, _ -> },
-    onTap: () -> Unit = {},
+    onLongPressEmpty: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
@@ -282,7 +282,7 @@ fun MonacoEditorView(
                             onReady = { isReady = true },
                             onError = { msg -> errorMsg = msg },
                             onSelectionChanged = onSelectionChanged,
-                            onTap = onTap
+                            onLongPressEmpty = onLongPressEmpty
                         ),
                         "AndroidBridge"
                     )
