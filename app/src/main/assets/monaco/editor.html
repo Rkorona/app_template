@@ -9,6 +9,7 @@
       width: 100%; height: 100%;
       overflow: hidden;
       background: #0D0D0D;
+      position: relative;
     }
     #editor {
       width: 100%; height: 100%;
@@ -24,10 +25,48 @@
       font-family: monospace; font-size: 14px;
       padding: 32px; line-height: 1.8;
     }
+    /* 光标下方可点击指示器（Compose 叠加层在 WebView 上可能被遮挡） */
+    #cursor-handle {
+      display: none;
+      position: absolute;
+      z-index: 50;
+      width: 28px;
+      height: 22px;
+      margin-left: -14px;
+      pointer-events: auto;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #cursor-handle::before {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 3px;
+      height: 9px;
+      margin-left: -1.5px;
+      background: #4FC3F7;
+      border-radius: 2px;
+    }
+    #cursor-handle::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: 0;
+      margin-left: -7px;
+      border-left: 7px solid transparent;
+      border-right: 7px solid transparent;
+      border-bottom: 10px solid #4FC3F7;
+    }
+    #cursor-handle:active::before,
+    #cursor-handle:active::after {
+      filter: brightness(1.25);
+    }
   </style>
 </head>
 <body>
 <div id="editor"></div>
+<div id="cursor-handle" aria-label="光标工具栏"></div>
 <div id="error-msg"></div>
 
 <!--
@@ -168,7 +207,7 @@ function initEditor() {
       'editor.selectionBackground':  '#264F78',
       'editorLineNumber.foreground': '#3C3C3C',
       'editorLineNumber.activeForeground': '#858585',
-      'editorCursor.foreground':     '#AEAFAD',
+      'editorCursor.foreground':     '#4FC3F7',
       'editorIndentGuide.background1': '#1E1E1E',
       'editorWidget.background':     '#1E1E1E',
       'editorSuggestWidget.background': '#1E1E1E',
@@ -203,10 +242,12 @@ function initEditor() {
     insertSpaces: true,
     renderWhitespace: 'selection',
     renderLineHighlight: 'line',
-    cursorBlinking: 'smooth',
+    cursorBlinking: 'blink',
+    cursorWidth: 2,
     smoothScrolling: true,
     // 移动端优化
     contextmenu:           false,   // 禁用右键菜单（移动端无用）
+    fixedOverflowWidgets:  true,
     mouseWheelZoom:        false,
     selectionHighlight:    true,
     occurrencesHighlight:  'off',
@@ -242,6 +283,15 @@ function initEditor() {
   // ── 光标移动 ─────────────────────────────────────────────────────
   window.editor.onDidChangeCursorPosition(function (e) {
     AndroidBridge.onCursorChanged(e.position.lineNumber, e.position.column);
+    reportCursorLayout();
+  });
+
+  window.editor.onDidScrollChange(function () {
+    reportCursorLayout();
+  });
+
+  window.editor.onDidLayoutChange(function () {
+    reportCursorLayout();
   });
 
   window.editor.onDidFocusEditorText(function () {
@@ -264,17 +314,68 @@ function initEditor() {
       } catch (e) { b64 = ''; }
     }
     AndroidBridge.onSelectionChanged(hasSelection, b64);
+    reportCursorLayout();
   });
 
   scheduleLayout();
   startLayoutPolling();
+  installCursorHandleClick();
 
   // ── 编辑器就绪（布局完成后再通知 Kotlin）────────────────────────
   scheduleLayout();
   setTimeout(function () {
     layoutEditor();
+    reportCursorLayout();
     AndroidBridge.onReady();
   }, 0);
+}
+
+/** 将光标/选区锚点转为编辑器容器内的像素坐标，供 Kotlin 绘制指示器 */
+function reportCursorLayout() {
+  if (!window.editor) return;
+  try {
+    var selection = window.editor.getSelection();
+    var hasSelection = selection && !selection.isEmpty();
+    var pos = selection.getStartPosition();
+    var coords = window.editor.getScrolledVisiblePosition(pos);
+    var handle = document.getElementById('cursor-handle');
+    if (!coords) {
+      if (handle) handle.style.display = 'none';
+      AndroidBridge.onCursorLayout(0, 0, 0, false);
+      return;
+    }
+    var layout = window.editor.getLayoutInfo();
+    var x = layout.contentLeft + coords.left;
+    var y = coords.top;
+    var h = Math.max(coords.height, 14);
+    if (handle) {
+      if (hasSelection) {
+        handle.style.display = 'none';
+      } else {
+        handle.style.display = 'block';
+        handle.style.left = Math.round(x) + 'px';
+        handle.style.top  = Math.round(y + h + 2) + 'px';
+      }
+    }
+    AndroidBridge.onCursorLayout(Math.round(x), Math.round(y), Math.round(h), true);
+  } catch (e) {
+    try { AndroidBridge.onCursorLayout(0, 0, 0, false); } catch (err) {}
+  }
+}
+
+function installCursorHandleClick() {
+  var handle = document.getElementById('cursor-handle');
+  if (!handle || handle._clickBound) return;
+  handle._clickBound = true;
+  function onHandleActivate(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    try { AndroidBridge.onCursorHandleClick(); } catch (err) {}
+  }
+  handle.addEventListener('click', onHandleActivate);
+  handle.addEventListener('touchend', function (e) {
+    onHandleActivate(e);
+  }, { passive: false });
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -702,21 +803,28 @@ function focusEditor() {
 
 // ════════════════════════════════════════════════════════════════
 // 移动端触摸增强
-// 单击  → 通知 Kotlin（用于粘贴气泡）
 // 双击  → 选中光标处单词
-// 长按  → 选中光标处单词
+// 长按（空编辑器）→ 在触摸点弹出工具栏
+// 拖选 → 完全交给 Monaco 原生处理，不拦截 touchmove
 // ════════════════════════════════════════════════════════════════
 (function installTouchHandlers() {
-  var tapCount    = 0;
-  var tapTimer    = null;
-  var longTimer   = null;
-  var lastX = 0, lastY = 0;
-  var moved = false;
+  var TOUCH_SLOP     = 14;
+  var LONG_PRESS_MS  = 450;
+  var DOUBLE_TAP_MS  = 280;
 
-  /**
-   * 通过屏幕坐标选中该处的单词（或整行非空内容）
-   * 返回 true 表示成功选中了内容，false 表示没有可选内容
-   */
+  var tapCount       = 0;
+  var tapTimer       = null;
+  var longTimer      = null;
+  var startX = 0, startY = 0;
+  var lastX = 0, lastY = 0;
+  var movedBeyondSlop = false;
+  var editorEl = null;
+
+  function getEditorEl() {
+    if (!editorEl) editorEl = document.getElementById('editor');
+    return editorEl;
+  }
+
   function selectWordAt(x, y) {
     if (!window.editor) return false;
     try {
@@ -732,52 +840,55 @@ function focusEditor() {
         });
         window.editor.focus();
         return true;
-      } else {
-        var lineLen = model.getLineLength(pos.lineNumber);
-        if (lineLen > 0) {
-          window.editor.setSelection({
-            startLineNumber: pos.lineNumber, startColumn: 1,
-            endLineNumber:   pos.lineNumber, endColumn:   lineLen + 1
-          });
-          window.editor.focus();
-          return true;
-        }
       }
     } catch (e) {}
     return false;
   }
 
-  document.addEventListener('touchstart', function (e) {
-    if (e.touches.length !== 1) { clearTimeout(longTimer); return; }
-    lastX = e.touches[0].clientX;
-    lastY = e.touches[0].clientY;
-    moved = false;
+  function notifyLongPress(x, y) {
+    try {
+      var el = getEditorEl();
+      var rect = el ? el.getBoundingClientRect() : { left: 0, top: 0 };
+      AndroidBridge.onLongPressEmpty(Math.round(x - rect.left), Math.round(y - rect.top));
+    } catch (err) {}
+  }
+
+  function onTouchStart(e) {
+    if (e.touches.length !== 1) {
+      clearTimeout(longTimer);
+      return;
+    }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    lastX  = startX;
+    lastY  = startY;
+    movedBeyondSlop = false;
     clearTimeout(longTimer);
+
     longTimer = setTimeout(function () {
-      if (moved) return;
-      // 长按：尝试选词；若编辑器为空或触摸处无内容，改为通知 Kotlin 弹出粘贴气泡
+      if (movedBeyondSlop) return;
       var model = window.editor ? window.editor.getModel() : null;
       var isEmpty = !model || model.getValueLength() === 0;
       if (isEmpty) {
-        try { AndroidBridge.onLongPressEmpty(); } catch (err) {}
-      } else {
-        var selected = selectWordAt(lastX, lastY);
-        if (!selected) {
-          try { AndroidBridge.onLongPressEmpty(); } catch (err) {}
-        }
+        notifyLongPress(lastX, lastY);
       }
-    }, 500);
-  }, { passive: true });
+    }, LONG_PRESS_MS);
+  }
 
-  document.addEventListener('touchmove', function () {
-    moved = true;
-    clearTimeout(longTimer);
-  }, { passive: true });
+  function onTouchMove(e) {
+    if (e.touches.length !== 1) return;
+    var dx = e.touches[0].clientX - startX;
+    var dy = e.touches[0].clientY - startY;
+    if (dx * dx + dy * dy > TOUCH_SLOP * TOUCH_SLOP) {
+      movedBeyondSlop = true;
+      clearTimeout(longTimer);
+    }
+  }
 
-  document.addEventListener('touchend', function (e) {
+  function onTouchEnd(e) {
     clearTimeout(longTimer);
-    if (moved) return;
-    // 双击选词；单击只移动光标，不触发气泡
+    if (movedBeyondSlop) return;
+
     tapCount++;
     clearTimeout(tapTimer);
     tapTimer = setTimeout(function () {
@@ -786,8 +897,29 @@ function focusEditor() {
       if (n >= 2) {
         selectWordAt(lastX, lastY);
       }
-    }, 220);
-  }, { passive: true });
+    }, DOUBLE_TAP_MS);
+  }
+
+  function attach() {
+    var el = getEditorEl();
+    if (!el || el._touchHandlersAttached) return;
+    el._touchHandlersAttached = true;
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove',  onTouchMove,  { passive: true });
+    el.addEventListener('touchend',   onTouchEnd,   { passive: true });
+    el.addEventListener('touchcancel', function () {
+      clearTimeout(longTimer);
+      clearTimeout(tapTimer);
+      tapCount = 0;
+    }, { passive: true });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', attach);
+  } else {
+    attach();
+  }
+  setTimeout(attach, 100);
 })();
 </script>
 </body>

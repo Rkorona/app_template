@@ -133,7 +133,9 @@ private class MonacoBridge(
     private val onReady: () -> Unit,
     private val onError: (String) -> Unit,
     private val onSelectionChanged: (hasSelection: Boolean, selectedText: String) -> Unit = { _, _ -> },
-    private val onLongPressEmpty: () -> Unit = {}
+    private val onLongPressEmpty: (x: Float, y: Float) -> Unit = { _, _ -> },
+    private val onCursorLayout: (x: Float, y: Float, caretHeight: Float, visible: Boolean) -> Unit = { _, _, _, _ -> },
+    private val onCursorHandleClick: () -> Unit = {}
 ) {
     private val main = Handler(Looper.getMainLooper())
 
@@ -174,8 +176,20 @@ private class MonacoBridge(
     }
 
     @JavascriptInterface
-    fun onLongPressEmpty() {
-        main.post { onLongPressEmpty.invoke() }
+    fun onLongPressEmpty(x: Int, y: Int) {
+        main.post { onLongPressEmpty.invoke(x.toFloat(), y.toFloat()) }
+    }
+
+    @JavascriptInterface
+    fun onCursorLayout(x: Int, y: Int, caretHeight: Int, visible: Boolean) {
+        main.post {
+            onCursorLayout.invoke(x.toFloat(), y.toFloat(), caretHeight.toFloat(), visible)
+        }
+    }
+
+    @JavascriptInterface
+    fun onCursorHandleClick() {
+        main.post { onCursorHandleClick.invoke() }
     }
 }
 
@@ -201,7 +215,9 @@ fun MonacoEditorView(
     onStats: (lines: Int, chars: Int) -> Unit = { _, _ -> },
     onCursor: (line: Int, col: Int) -> Unit = { _, _ -> },
     onSelectionChanged: (hasSelection: Boolean, selectedText: String) -> Unit = { _, _ -> },
-    onLongPressEmpty: () -> Unit = {},
+    onLongPressEmpty: (x: Float, y: Float) -> Unit = { _, _ -> },
+    onCursorLayout: (x: Float, y: Float, caretHeight: Float, visible: Boolean) -> Unit = { _, _, _, _ -> },
+    onCursorHandleClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val isDark = isSystemInDarkTheme()
@@ -282,7 +298,9 @@ fun MonacoEditorView(
                             onReady = { isReady = true },
                             onError = { msg -> errorMsg = msg },
                             onSelectionChanged = onSelectionChanged,
-                            onLongPressEmpty = onLongPressEmpty
+                            onLongPressEmpty = onLongPressEmpty,
+                            onCursorLayout = onCursorLayout,
+                            onCursorHandleClick = onCursorHandleClick
                         ),
                         "AndroidBridge"
                     )

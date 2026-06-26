@@ -22,13 +22,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import com.scripthub.app.ui.components.FolderFileBrowserSheet
 import com.scripthub.app.ui.components.MonacoEditorController
 import com.scripthub.app.ui.components.MonacoEditorView
@@ -38,6 +41,26 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
+
+/** 根据光标/选区锚点计算浮动工具栏位置（相对编辑器区域左上角） */
+private fun toolbarOffsetForAnchor(
+    anchorX: Float,
+    anchorY: Float,
+    caretHeight: Float,
+    containerWidth: Float,
+    density: Float
+): Pair<Float, Float> {
+    val toolbarHalf = 96f * density
+    val handleH     = 22f * density
+    val margin      = 8f * density
+    val x = if (containerWidth > 0f) {
+        (anchorX - toolbarHalf).coerceIn(margin, (containerWidth - toolbarHalf * 2f).coerceAtLeast(margin))
+    } else {
+        (anchorX - toolbarHalf).coerceAtLeast(margin)
+    }
+    val y = anchorY + caretHeight + handleH + margin
+    return x to y
+}
 
 // ──────────────────────────────────────────────────────────────────
 // 语言枚举 & 检测（Monaco language ID）
@@ -274,12 +297,31 @@ fun ScriptEditorScreen(
     var selectedText by remember { mutableStateOf("") }
 
     // ── 双态工具栏控制 ─────────────────────────────────────────────
-    // 除了有选区，如果编辑器是空的，或者用户主动点击了空白处，我们也允许在页面呼出气泡。
     var showPasteBubbleManually by remember { mutableStateOf(false) }
 
-    // ── 浮动工具栏坐标偏移 ──────────────────────────────────────────
-    var offsetX by remember { mutableStateOf(0f) }
-    var offsetY by remember { mutableStateOf(120f) }
+    // ── 光标指示器 & 工具栏定位（相对编辑器区域，单位 px）────────
+    var cursorLayoutX by remember { mutableFloatStateOf(0f) }
+    var cursorLayoutY by remember { mutableFloatStateOf(0f) }
+    var caretHeight by remember { mutableFloatStateOf(18f) }
+    var editorBoxWidth by remember { mutableFloatStateOf(0f) }
+
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var offsetY by remember { mutableFloatStateOf(120f) }
+
+    val density = LocalDensity.current
+
+    fun positionToolbarAtCursor() {
+        val (x, y) = toolbarOffsetForAnchor(
+            cursorLayoutX, cursorLayoutY, caretHeight, editorBoxWidth, density.density
+        )
+        offsetX = x
+        offsetY = y
+    }
+
+    fun openToolbarAtCursor() {
+        positionToolbarAtCursor()
+        showPasteBubbleManually = true
+    }
 
     val clipboard = remember(context) {
         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -293,9 +335,18 @@ fun ScriptEditorScreen(
         }
     }
 
-    // ── 选区出现时关闭手动粘贴气泡（选区工具栏接管） ──────────────────
+    // ── 选区出现时关闭手动粘贴气泡，并将工具栏定位到选区锚点 ────────
     LaunchedEffect(hasSelection) {
-        if (hasSelection) showPasteBubbleManually = false
+        if (hasSelection) {
+            showPasteBubbleManually = false
+            positionToolbarAtCursor()
+        }
+    }
+
+    LaunchedEffect(cursorLayoutX, cursorLayoutY, caretHeight, hasSelection, showPasteBubbleManually) {
+        if (hasSelection || showPasteBubbleManually) {
+            positionToolbarAtCursor()
+        }
     }
 
     // ── 文件加载 ──────────────────────────────────────────────────
@@ -585,6 +636,7 @@ fun ScriptEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .onSizeChanged { editorBoxWidth = it.width.toFloat() }
         ) {
             if (!isFileLoaded) {
                 Box(
@@ -609,11 +661,18 @@ fun ScriptEditorScreen(
                     onStats            = { lines, chars -> lineCount = lines; charCount = chars },
                     onCursor           = { line, col -> cursorLine = line; cursorCol = col },
                     onSelectionChanged = { has, text -> hasSelection = has; selectedText = text },
-                    onLongPressEmpty   = {
-                        showPasteBubbleManually = true
-                        offsetX = 0f
-                        offsetY = 120f
+                    onLongPressEmpty   = { x, y ->
+                        cursorLayoutX = x
+                        cursorLayoutY = y
+                        caretHeight = with(density) { 18.dp.toPx() }
+                        openToolbarAtCursor()
                     },
+                    onCursorLayout     = { x, y, h, _ ->
+                        cursorLayoutX = x
+                        cursorLayoutY = y
+                        caretHeight = h
+                    },
+                    onCursorHandleClick = { openToolbarAtCursor() },
                     modifier           = Modifier.fillMaxSize()
                 )
             }
@@ -626,7 +685,8 @@ fun ScriptEditorScreen(
                 enter   = fadeIn() + scaleIn(),
                 exit    = fadeOut() + scaleOut(),
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
+                    .zIndex(10f)
+                    .align(Alignment.TopStart)
                     .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
             ) {
                 Card(
