@@ -4,10 +4,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -21,17 +19,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import com.scripthub.app.ui.components.FolderFileBrowserSheet
 import com.scripthub.app.ui.components.MonacoEditorController
 import com.scripthub.app.ui.components.MonacoEditorView
@@ -40,27 +33,6 @@ import com.scripthub.app.utils.FileHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlin.math.roundToInt
-
-/** 根据光标/选区锚点计算浮动工具栏位置（相对编辑器区域左上角） */
-private fun toolbarOffsetForAnchor(
-    anchorX: Float,
-    anchorY: Float,
-    caretHeight: Float,
-    containerWidth: Float,
-    density: Float
-): Pair<Float, Float> {
-    val toolbarHalf = 96f * density
-    val handleH     = 22f * density
-    val margin      = 8f * density
-    val x = if (containerWidth > 0f) {
-        (anchorX - toolbarHalf).coerceIn(margin, (containerWidth - toolbarHalf * 2f).coerceAtLeast(margin))
-    } else {
-        (anchorX - toolbarHalf).coerceAtLeast(margin)
-    }
-    val y = anchorY + caretHeight + handleH + margin
-    return x to y
-}
 
 // ──────────────────────────────────────────────────────────────────
 // 语言枚举 & 检测（Monaco language ID）
@@ -296,33 +268,6 @@ fun ScriptEditorScreen(
     var hasSelection by remember { mutableStateOf(false) }
     var selectedText by remember { mutableStateOf("") }
 
-    // ── 双态工具栏控制 ─────────────────────────────────────────────
-    var showPasteBubbleManually by remember { mutableStateOf(false) }
-
-    // ── 光标指示器 & 工具栏定位（相对编辑器区域，单位 px）────────
-    var cursorLayoutX by remember { mutableFloatStateOf(0f) }
-    var cursorLayoutY by remember { mutableFloatStateOf(0f) }
-    var caretHeight by remember { mutableFloatStateOf(18f) }
-    var editorBoxWidth by remember { mutableFloatStateOf(0f) }
-
-    var offsetX by remember { mutableFloatStateOf(0f) }
-    var offsetY by remember { mutableFloatStateOf(120f) }
-
-    val density = LocalDensity.current
-
-    fun positionToolbarAtCursor() {
-        val (x, y) = toolbarOffsetForAnchor(
-            cursorLayoutX, cursorLayoutY, caretHeight, editorBoxWidth, density.density
-        )
-        offsetX = x
-        offsetY = y
-    }
-
-    fun openToolbarAtCursor() {
-        positionToolbarAtCursor()
-        showPasteBubbleManually = true
-    }
-
     val clipboard = remember(context) {
         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     }
@@ -332,20 +277,6 @@ fun ScriptEditorScreen(
         derivedStateOf {
             clipboard.hasPrimaryClip() && 
             clipboard.primaryClipDescription?.hasMimeType("text/*") == true
-        }
-    }
-
-    // ── 选区出现时关闭手动粘贴气泡，并将工具栏定位到选区锚点 ────────
-    LaunchedEffect(hasSelection) {
-        if (hasSelection) {
-            showPasteBubbleManually = false
-            positionToolbarAtCursor()
-        }
-    }
-
-    LaunchedEffect(cursorLayoutX, cursorLayoutY, caretHeight, hasSelection, showPasteBubbleManually) {
-        if (hasSelection || showPasteBubbleManually) {
-            positionToolbarAtCursor()
         }
     }
 
@@ -401,7 +332,6 @@ fun ScriptEditorScreen(
         val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
         if (text.isNotEmpty()) {
             controllerRef.value?.typeText(text)
-            showPasteBubbleManually = false
             Toast.makeText(context, "已粘贴", Toast.LENGTH_SHORT).show()
         } else {
             Toast.makeText(context, "剪贴板为空", Toast.LENGTH_SHORT).show()
@@ -594,7 +524,7 @@ fun ScriptEditorScreen(
 
                     HorizontalDivider(color = colors.outlineVariant)
 
-                    // ── ───────────────────────
+                    // ── 符号键盘行 ──────────────────────────────────────
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment     = Alignment.CenterVertically,
@@ -603,9 +533,44 @@ fun ScriptEditorScreen(
                             .horizontalScroll(rememberScrollState())
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                     ) {
-                        
+                        // ── 光标工具栏：有选区时自动出现在最前面 ────────────────
+                        if (hasSelection) {
+                            TextButton(
+                                onClick = {
+                                    if (selectedText.isNotEmpty()) {
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
+                                    }
+                                    controllerRef.value?.deleteSelection()
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier       = Modifier.height(34.dp)
+                            ) { Text("剪切", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
 
-                        // 原方向移动键
+                            TextButton(
+                                onClick = {
+                                    if (selectedText.isNotEmpty()) {
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
+                                        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier       = Modifier.height(34.dp)
+                            ) { Text("复制", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+
+                            TextButton(
+                                onClick        = { performPaste() },
+                                enabled        = hasClipboardText.value,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier       = Modifier.height(34.dp)
+                            ) { Text("粘贴", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+
+                            VerticalDivider(
+                                modifier = Modifier.height(22.dp).padding(horizontal = 2.dp),
+                                color    = colors.outlineVariant
+                            )
+                        }
+
+                        // 方向移动键
                         CodeKey("←", special = true) { controllerRef.value?.moveCursor("left")  }
                         CodeKey("↑", special = true) { controllerRef.value?.moveCursor("up")    }
                         CodeKey("↓", special = true) { controllerRef.value?.moveCursor("down")  }
@@ -629,7 +594,6 @@ fun ScriptEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .onSizeChanged { editorBoxWidth = it.width.toFloat() }
         ) {
             if (!isFileLoaded) {
                 Box(
@@ -654,112 +618,10 @@ fun ScriptEditorScreen(
                     onStats            = { lines, chars -> lineCount = lines; charCount = chars },
                     onCursor           = { line, col -> cursorLine = line; cursorCol = col },
                     onSelectionChanged = { has, text -> hasSelection = has; selectedText = text },
-                    onLongPressEmpty   = { x, y ->
-                        cursorLayoutX = x
-                        cursorLayoutY = y
-                        caretHeight = with(density) { 18.dp.toPx() }
-                        openToolbarAtCursor()
-                    },
-                    onCursorLayout     = { x, y, h, _ ->
-                        cursorLayoutX = x
-                        cursorLayoutY = y
-                        caretHeight = h
-                    },
-                    onCursorHandleClick = { openToolbarAtCursor() },
                     modifier           = Modifier.fillMaxSize()
                 )
             }
 
-            // ── 浮动气泡菜单 (支持：1. 有选区的完整菜单； 2. 无选区但手动呼出的简易“粘贴”菜单) ──
-            val isBubbleVisible = hasSelection || showPasteBubbleManually
-
-            AnimatedVisibility(
-                visible = isBubbleVisible,
-                enter   = fadeIn() + scaleIn(),
-                exit    = fadeOut() + scaleOut(),
-                modifier = Modifier
-                    .zIndex(10f)
-                    .align(Alignment.TopStart)
-                    .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
-            ) {
-                Card(
-                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                    shape     = RoundedCornerShape(24.dp),
-                    colors    = CardDefaults.cardColors(
-                        containerColor = colors.surfaceColorAtElevation(8.dp)
-                    ),
-                    modifier = Modifier
-                        .pointerInput(Unit) {
-                            detectDragGestures { change, dragAmount ->
-                                change.consume()
-                                offsetX += dragAmount.x
-                                offsetY += dragAmount.y
-                            }
-                        }
-                        .wrapContentSize()
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment     = Alignment.CenterVertically,
-                        modifier              = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector        = Icons.Default.DragIndicator,
-                            contentDescription = "拖动",
-                            tint               = colors.outline.copy(alpha = 0.5f),
-                            modifier           = Modifier.size(16.dp)
-                        )
-
-                        // 全选（有无选区都显示）
-                        TextButton(
-                            onClick = {
-                                controllerRef.value?.selectAll()
-                                showPasteBubbleManually = false
-                            },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier       = Modifier.height(32.dp)
-                        ) { Text("全选", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-
-                        if (hasSelection) {
-                            VerticalDivider(modifier = Modifier.height(16.dp), color = colors.outlineVariant)
-
-                            TextButton(
-                                onClick = {
-                                    if (selectedText.isNotEmpty()) {
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
-                                    }
-                                    controllerRef.value?.deleteSelection()
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier       = Modifier.height(32.dp)
-                            ) { Text("剪切", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-
-                            VerticalDivider(modifier = Modifier.height(16.dp), color = colors.outlineVariant)
-
-                            TextButton(
-                                onClick = {
-                                    if (selectedText.isNotEmpty()) {
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
-                                        Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
-                                    }
-                                },
-                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                modifier       = Modifier.height(32.dp)
-                            ) { Text("复制", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                        }
-
-                        VerticalDivider(modifier = Modifier.height(16.dp), color = colors.outlineVariant)
-
-                        // 粘贴：剪贴板为空时禁用而非隐藏
-                        TextButton(
-                            onClick        = { performPaste() },
-                            enabled        = hasClipboardText.value,
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                            modifier       = Modifier.height(32.dp)
-                        ) { Text("粘贴", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                    }
-                }
-            }
         }
     }
 

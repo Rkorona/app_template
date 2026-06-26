@@ -25,48 +25,10 @@
       font-family: monospace; font-size: 14px;
       padding: 32px; line-height: 1.8;
     }
-    /* 光标下方可点击指示器（Compose 叠加层在 WebView 上可能被遮挡） */
-    #cursor-handle {
-      display: none;
-      position: absolute;
-      z-index: 50;
-      width: 28px;
-      height: 22px;
-      margin-left: -14px;
-      pointer-events: auto;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-    }
-    #cursor-handle::before {
-      content: '';
-      position: absolute;
-      left: 50%;
-      top: 0;
-      width: 3px;
-      height: 9px;
-      margin-left: -1.5px;
-      background: #4FC3F7;
-      border-radius: 2px;
-    }
-    #cursor-handle::after {
-      content: '';
-      position: absolute;
-      left: 50%;
-      bottom: 0;
-      margin-left: -7px;
-      border-left: 7px solid transparent;
-      border-right: 7px solid transparent;
-      border-bottom: 10px solid #4FC3F7;
-    }
-    #cursor-handle:active::before,
-    #cursor-handle:active::after {
-      filter: brightness(1.25);
-    }
   </style>
 </head>
 <body>
 <div id="editor"></div>
-<div id="cursor-handle" aria-label="光标工具栏"></div>
 <div id="error-msg"></div>
 
 <!--
@@ -319,7 +281,6 @@ function initEditor() {
 
   scheduleLayout();
   startLayoutPolling();
-  installCursorHandleClick();
 
   // ── 编辑器就绪（布局完成后再通知 Kotlin）────────────────────────
   scheduleLayout();
@@ -330,17 +291,14 @@ function initEditor() {
   }, 0);
 }
 
-/** 将光标/选区锚点转为编辑器容器内的像素坐标，供 Kotlin 绘制指示器 */
+/** 将光标/选区锚点转为编辑器容器内的像素坐标，供 Kotlin 感知选区状态 */
 function reportCursorLayout() {
   if (!window.editor) return;
   try {
     var selection = window.editor.getSelection();
-    var hasSelection = selection && !selection.isEmpty();
     var pos = selection.getStartPosition();
     var coords = window.editor.getScrolledVisiblePosition(pos);
-    var handle = document.getElementById('cursor-handle');
     if (!coords) {
-      if (handle) handle.style.display = 'none';
       AndroidBridge.onCursorLayout(0, 0, 0, false);
       return;
     }
@@ -348,34 +306,10 @@ function reportCursorLayout() {
     var x = layout.contentLeft + coords.left;
     var y = coords.top;
     var h = Math.max(coords.height, 14);
-    if (handle) {
-      if (hasSelection) {
-        handle.style.display = 'none';
-      } else {
-        handle.style.display = 'block';
-        handle.style.left = Math.round(x) + 'px';
-        handle.style.top  = Math.round(y + h + 2) + 'px';
-      }
-    }
     AndroidBridge.onCursorLayout(Math.round(x), Math.round(y), Math.round(h), true);
   } catch (e) {
     try { AndroidBridge.onCursorLayout(0, 0, 0, false); } catch (err) {}
   }
-}
-
-function installCursorHandleClick() {
-  var handle = document.getElementById('cursor-handle');
-  if (!handle || handle._clickBound) return;
-  handle._clickBound = true;
-  function onHandleActivate(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    try { AndroidBridge.onCursorHandleClick(); } catch (err) {}
-  }
-  handle.addEventListener('click', onHandleActivate);
-  handle.addEventListener('touchend', function (e) {
-    onHandleActivate(e);
-  }, { passive: false });
 }
 
 // ════════════════════════════════════════════════════════════════
