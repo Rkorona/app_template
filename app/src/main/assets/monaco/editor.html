@@ -197,7 +197,7 @@ function initEditor() {
     minimap:    { enabled: false },
     scrollBeyondLastLine: false,
     automaticLayout: true,
-    domReadOnly: false,
+    domReadOnly: true,
     readOnly: false,
     wordWrap:   'off',
     tabSize:    4,
@@ -792,22 +792,53 @@ function registerLanguageCompletions() {
   });
 }
 
+/** 是否已进入编辑模式（单击解锁后为 true，滑动浏览时重置） */
+var inputUnlocked = false;
+
 /** 锁定隐藏 textarea，防止滚动时系统自动弹出键盘 */
 function lockEditorInput() {
   var input = document.querySelector('.monaco-editor textarea.inputarea');
-  if (input) input.setAttribute('readonly', 'readonly');
+  if (input) {
+    input.setAttribute('readonly', 'readonly');
+    input.setAttribute('inputmode', 'none');
+  }
 }
 
-/** 用户点击后解锁输入并聚焦 */
+/** 用户点击后解锁输入 */
 function unlockEditorInput() {
   var input = document.querySelector('.monaco-editor textarea.inputarea');
-  if (input) input.removeAttribute('readonly');
+  if (input) {
+    input.removeAttribute('readonly');
+    input.removeAttribute('inputmode');
+  }
+}
+
+function enableEditorInput() {
+  if (!window.editor) return;
+  inputUnlocked = true;
+  window.editor.updateOptions({ domReadOnly: false });
+  unlockEditorInput();
+}
+
+function dismissEditorInput() {
+  if (!window.editor) return;
+  inputUnlocked = false;
+  window.editor.updateOptions({ domReadOnly: true });
+  lockEditorInput();
+  try {
+    var input = document.querySelector('.monaco-editor textarea.inputarea');
+    if (input) input.blur();
+    if (document.activeElement && document.activeElement !== document.body) {
+      document.activeElement.blur();
+    }
+  } catch (e) {}
+  try { AndroidBridge.onEditorDismissed(); } catch (err) {}
 }
 
 /** 在触摸点聚焦并请求弹出系统键盘 */
 function focusForEditing(clientX, clientY) {
   if (!window.editor) return;
-  unlockEditorInput();
+  enableEditorInput();
   try {
     var target = window.editor.getTargetAtClientPoint(clientX, clientY);
     if (target && target.position) {
@@ -824,7 +855,7 @@ function focusForEditing(clientX, clientY) {
 /** 聚焦编辑器（代码键盘按键后重新聚焦）*/
 function focusEditor() {
   if (!window.editor) return;
-  unlockEditorInput();
+  enableEditorInput();
   window.editor.focus();
   var input = document.querySelector('.monaco-editor textarea.inputarea');
   if (input) input.focus();
@@ -897,6 +928,9 @@ function focusEditor() {
     lastTouchY = startY;
     movedBeyondSlop = false;
     clearTimeout(longTimer);
+    if (!inputUnlocked) {
+      dismissEditorInput();
+    }
 
     longTimer = setTimeout(function () {
       if (movedBeyondSlop) return;
@@ -919,6 +953,7 @@ function focusEditor() {
     if (dx * dx + dy * dy > TOUCH_SLOP * TOUCH_SLOP) {
       movedBeyondSlop = true;
       clearTimeout(longTimer);
+      dismissEditorInput();
     }
   }
 

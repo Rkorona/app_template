@@ -32,21 +32,6 @@ import android.webkit.ConsoleMessage
 
 private const val TAG = "MonacoEditorView"
 
-private fun showKeyboard(webView: WebView) {
-    webView.post {
-        webView.requestFocus(View.FOCUS_DOWN)
-        val imm = webView.context.getSystemService(InputMethodManager::class.java) ?: return@post
-        imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
-    }
-}
-
-private fun hideKeyboard(webView: WebView) {
-    webView.post {
-        val imm = webView.context.getSystemService(InputMethodManager::class.java) ?: return@post
-        imm.hideSoftInputFromWindow(webView.windowToken, 0)
-    }
-}
-
 // ──────────────────────────────────────────────────────────────────
 // MonacoEditorController — 替代 CodeEditor 引用，暴露给父级使用
 // ──────────────────────────────────────────────────────────────────
@@ -117,7 +102,6 @@ class MonacoEditorController(private val webView: WebView) {
     /** 聚焦编辑器并弹出系统键盘 */
     fun focus() {
         evalJs("focusEditor()")
-        showKeyboard(webView)
     }
 
     /** 强制重新布局（Android WebView 尺寸变化时需手动触发） */
@@ -168,10 +152,24 @@ private class MonacoBridge(
         main.post { onReady.invoke() }
     }
 
-    /** 用户明确点击编辑器后才弹出系统键盘（滚动不会触发） */
+    /** 用户明确点击编辑器后才允许系统软键盘 */
     @JavascriptInterface
     fun onEditorTapped() {
-        main.post { showKeyboard(webView) }
+        main.post {
+            val wv = webView as? MonacoWebView ?: return@post
+            wv.enableIme()
+            wv.requestFocus(View.FOCUS_DOWN)
+            val imm = wv.context.getSystemService(InputMethodManager::class.java) ?: return@post
+            imm.showSoftInput(wv, InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    /** 滚动或触摸浏览时关闭软键盘并禁止 WebView 声明为文本编辑器 */
+    @JavascriptInterface
+    fun onEditorDismissed() {
+        main.post {
+            (webView as? MonacoWebView)?.disableIme()
+        }
     }
 
     @JavascriptInterface
@@ -255,7 +253,7 @@ fun MonacoEditorView(
                         ViewGroup.LayoutParams.MATCH_PARENT
                     )
                     isFocusable = true
-                    isFocusableInTouchMode = true
+                    isFocusableInTouchMode = false
                     setBackgroundColor(Color.parseColor(if (isDark) "#0D0D0D" else "#FAFAFA"))
 
                     val touchSlop = ViewConfiguration.get(ctx).scaledTouchSlop
@@ -264,6 +262,7 @@ fun MonacoEditorView(
                     var touchMoved = false
 
                     setOnTouchListener { v, event ->
+                        val wv = v as MonacoWebView
                         when (event.actionMasked) {
                             MotionEvent.ACTION_DOWN -> {
                                 touchStartX = event.x
@@ -276,7 +275,8 @@ fun MonacoEditorView(
                                     val dy = event.y - touchStartY
                                     if (dx * dx + dy * dy > touchSlop * touchSlop) {
                                         touchMoved = true
-                                        hideKeyboard(v as WebView)
+                                        wv.disableIme()
+                                        wv.evaluateJavascript("dismissEditorInput()", null)
                                     }
                                 }
                             }
