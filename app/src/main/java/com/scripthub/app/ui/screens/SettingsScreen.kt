@@ -196,15 +196,6 @@ fun SettingsScreen(
                             subtitle = "在 ${distro.displayName} 环境中执行命令"
                         ) { onNavigate("Terminal") }
                     }
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        color    = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
-                    ConfigListItem(
-                        icon     = Icons.Default.Code,
-                        title    = "Spck 编辑器",
-                        subtitle = "功能完整的 Web IDE，支持 Git 与多语言"
-                    ) { onNavigate("SpckEditor") }
                 }
             }
         }

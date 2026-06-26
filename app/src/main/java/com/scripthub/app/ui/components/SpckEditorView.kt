@@ -196,9 +196,7 @@ fun SpckEditorView(
 
                     webViewClient = object : WebViewClient() {
                         override fun onPageFinished(view: WebView?, url: String?) {
-                            view?.postDelayed({
-                                injectContentScript(view)
-                            }, 1500)
+                            view?.let { injectContentScript(it) }
                         }
 
                         override fun shouldOverrideUrlLoading(
@@ -233,45 +231,76 @@ fun SpckEditorView(
 }
 
 /**
- * 在 SPCK 页面加载完成后注入脚本，等待 Ace 编辑器实例就绪，
- * 然后通过 SpckAndroidBridge.getInitialContent() 拿到内容并写入编辑器。
+ * 注入内容脚本：
+ * 1. 先用 MutationObserver 等待 SPCK 自身初始化完毕（body 移除 se-loading 类）
+ * 2. 再等 1 秒让 SPCK 从 IndexedDB 恢复 session
+ * 3. 然后轮询找到 Ace 编辑器，写入文件内容
  */
 private fun injectContentScript(view: WebView) {
     val js = """
         (function() {
-            var MAX_TRIES = 120;
-            var tries = 0;
-            var interval = setInterval(function() {
-                tries++;
-                try {
-                    var editorEls = document.querySelectorAll('.ace_editor');
-                    if (editorEls.length > 0 && window.ace) {
-                        var editor = ace.edit(editorEls[0]);
-                        if (editor && typeof editor.getValue === 'function') {
-                            var b64 = window.SpckAndroidBridge.getInitialContent();
-                            if (b64 && b64.length > 0) {
+            function doInject() {
+                var b64 = window.SpckAndroidBridge.getInitialContent();
+                if (!b64 || b64.length === 0) {
+                    window._spckAndroidEditor = null;
+                    window.SpckAndroidBridge.onEditorReady();
+                    return;
+                }
+                var MAX_TRIES = 60;
+                var tries = 0;
+                var interval = setInterval(function() {
+                    tries++;
+                    try {
+                        var editorEls = document.querySelectorAll('.ace_editor');
+                        if (editorEls.length > 0 && window.ace) {
+                            var editor = ace.edit(editorEls[0]);
+                            if (editor && typeof editor.getValue === 'function') {
                                 try {
                                     var decoded = decodeURIComponent(escape(atob(b64)));
                                     editor.setValue(decoded, -1);
                                 } catch(e) {
-                                    editor.setValue(atob(b64), -1);
+                                    try { editor.setValue(atob(b64), -1); } catch(e2) {}
                                 }
+                                window._spckAndroidEditor = editor;
+                                clearInterval(interval);
+                                window.SpckAndroidBridge.onEditorReady();
+                                return;
                             }
-                            window._spckAndroidEditor = editor;
-                            clearInterval(interval);
-                            window.SpckAndroidBridge.onEditorReady();
-                            return;
                         }
+                    } catch(e) {
+                        console.log('SpckBridge inject error: ' + e.message);
                     }
-                } catch(e) {
-                    console.log('SpckBridge inject error: ' + e.message);
+                    if (tries >= MAX_TRIES) {
+                        clearInterval(interval);
+                        console.log('SpckBridge: gave up after ' + MAX_TRIES + ' tries');
+                        window.SpckAndroidBridge.onEditorReady();
+                    }
+                }, 500);
+            }
+
+            var body = document.body;
+            if (!body || !body.classList.contains('se-loading')) {
+                setTimeout(doInject, 1000);
+                return;
+            }
+            var observer = new MutationObserver(function(mutations) {
+                for (var i = 0; i < mutations.length; i++) {
+                    if (mutations[i].type === 'attributes' &&
+                        mutations[i].attributeName === 'class' &&
+                        !body.classList.contains('se-loading')) {
+                        observer.disconnect();
+                        setTimeout(doInject, 1200);
+                        return;
+                    }
                 }
-                if (tries >= MAX_TRIES) {
-                    clearInterval(interval);
-                    console.log('SpckBridge: Ace editor not found after timeout');
-                    window.SpckAndroidBridge.onEditorReady();
+            });
+            observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+            setTimeout(function() {
+                if (body.classList.contains('se-loading')) {
+                    observer.disconnect();
+                    doInject();
                 }
-            }, 500);
+            }, 40000);
         })();
     """.trimIndent()
     view.evaluateJavascript(js, null)
