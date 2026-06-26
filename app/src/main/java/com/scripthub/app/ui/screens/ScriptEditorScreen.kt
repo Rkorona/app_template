@@ -536,6 +536,12 @@ fun ScriptEditorScreen(
                         // ── 光标工具栏：有选区时自动出现在最前面 ────────────────
                         if (hasSelection) {
                             TextButton(
+                                onClick = { controllerRef.value?.selectAll() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier       = Modifier.height(34.dp)
+                            ) { Text("全选", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+
+                            TextButton(
                                 onClick = {
                                     if (selectedText.isNotEmpty()) {
                                         clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))

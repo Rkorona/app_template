@@ -403,16 +403,25 @@ function editorRedo() {
   window.editor.trigger('keyboard', 'redo', null);
 }
 
-/** 光标移动：left | right | up | down */
+/** 光标移动：left | right | up | down
+ *  有选区时扩展/收缩选区；无选区时普通移动光标 */
 function moveCursor(direction) {
-  var map = {
+  var hasSelection = window.editor && !window.editor.getSelection().isEmpty();
+  var moveMap = {
     left:  'cursorLeft',
     right: 'cursorRight',
     up:    'cursorUp',
     down:  'cursorDown'
   };
-  if (map[direction]) {
-    window.editor.trigger('keyboard', map[direction], null);
+  var selectMap = {
+    left:  'cursorLeftSelect',
+    right: 'cursorRightSelect',
+    up:    'cursorUpSelect',
+    down:  'cursorDownSelect'
+  };
+  var cmd = hasSelection ? selectMap[direction] : moveMap[direction];
+  if (cmd) {
+    window.editor.trigger('keyboard', cmd, null);
   }
 }
 
