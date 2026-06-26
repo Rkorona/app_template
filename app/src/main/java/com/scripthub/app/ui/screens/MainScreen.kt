@@ -149,6 +149,7 @@ fun MainScreen() {
     ) {
         currentRoute = when (currentRoute) {
             "ScriptEditor" -> "ScriptManager"
+            "SpckEditor"   -> "ScriptManager"
             else           -> "Settings"
         }
     }
@@ -300,7 +301,12 @@ fun MainScreen() {
                     onSetupComplete = { navigateTo("Settings") }
                 )
                 "Terminal"       -> ShellTerminalScreen(contentPadding = innerPadding)
-                "SpckEditor"     -> SpckEditorScreen(onBack = { navigateTo("Settings") })
+                "SpckEditor"     -> SpckEditorScreen(
+                    fileName   = editingFileName,
+                    isFolder   = editingIsFolder,
+                    entryPoint = editingEntryPoint,
+                    onBack     = { navigateTo("ScriptManager") }
+                )
                 "ScriptEditor"   -> ScriptEditorScreen(
                     fileName   = editingFileName,
                     isFolder   = editingIsFolder,
