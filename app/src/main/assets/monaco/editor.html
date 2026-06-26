@@ -256,13 +256,7 @@ function initEditor() {
     reportCursorLayout();
   });
 
-  window.editor.onDidFocusEditorText(function () {
-    AndroidBridge.onEditorFocused();
-  });
-
-  window.editor.onDidFocusEditorWidget(function () {
-    AndroidBridge.onEditorFocused();
-  });
+  lockEditorInput();
 
   // ── 选区变化 → 通知 Kotlin，用于显示剪切/复制/粘贴工具栏 ────────
   window.editor.onDidChangeCursorSelection(function () {
@@ -798,16 +792,43 @@ function registerLanguageCompletions() {
   });
 }
 
+/** 锁定隐藏 textarea，防止滚动时系统自动弹出键盘 */
+function lockEditorInput() {
+  var input = document.querySelector('.monaco-editor textarea.inputarea');
+  if (input) input.setAttribute('readonly', 'readonly');
+}
+
+/** 用户点击后解锁输入并聚焦 */
+function unlockEditorInput() {
+  var input = document.querySelector('.monaco-editor textarea.inputarea');
+  if (input) input.removeAttribute('readonly');
+}
+
+/** 在触摸点聚焦并请求弹出系统键盘 */
+function focusForEditing(clientX, clientY) {
+  if (!window.editor) return;
+  unlockEditorInput();
+  try {
+    var target = window.editor.getTargetAtClientPoint(clientX, clientY);
+    if (target && target.position) {
+      window.editor.setPosition(target.position);
+      window.editor.revealPositionInCenterIfOutsideViewport(target.position);
+    }
+  } catch (e) {}
+  window.editor.focus();
+  var input = document.querySelector('.monaco-editor textarea.inputarea');
+  if (input) input.focus();
+  AndroidBridge.onEditorTapped();
+}
+
 /** 聚焦编辑器（代码键盘按键后重新聚焦）*/
 function focusEditor() {
   if (!window.editor) return;
+  unlockEditorInput();
   window.editor.focus();
   var input = document.querySelector('.monaco-editor textarea.inputarea');
-  if (input) {
-    input.removeAttribute('readonly');
-    input.focus();
-  }
-  AndroidBridge.onEditorFocused();
+  if (input) input.focus();
+  AndroidBridge.onEditorTapped();
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -826,6 +847,7 @@ function focusEditor() {
   var longTimer      = null;
   var startX = 0, startY = 0;
   var lastX = 0, lastY = 0;
+  var lastTouchX = 0, lastTouchY = 0;
   var movedBeyondSlop = false;
   var editorEl = null;
 
@@ -871,6 +893,8 @@ function focusEditor() {
     startY = e.touches[0].clientY;
     lastX  = startX;
     lastY  = startY;
+    lastTouchX = startX;
+    lastTouchY = startY;
     movedBeyondSlop = false;
     clearTimeout(longTimer);
 
@@ -886,6 +910,10 @@ function focusEditor() {
 
   function onTouchMove(e) {
     if (e.touches.length !== 1) return;
+    lastX = e.touches[0].clientX;
+    lastY = e.touches[0].clientY;
+    lastTouchX = lastX;
+    lastTouchY = lastY;
     var dx = e.touches[0].clientX - startX;
     var dy = e.touches[0].clientY - startY;
     if (dx * dx + dy * dy > TOUCH_SLOP * TOUCH_SLOP) {
@@ -905,6 +933,8 @@ function focusEditor() {
       tapCount = 0;
       if (n >= 2) {
         selectWordAt(lastX, lastY);
+      } else if (n === 1) {
+        focusForEditing(lastX, lastY);
       }
     }, DOUBLE_TAP_MS);
   }

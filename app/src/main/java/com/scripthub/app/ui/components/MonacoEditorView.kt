@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Base64
 import android.util.Log
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.view.View
@@ -36,6 +37,13 @@ private fun showKeyboard(webView: WebView) {
         webView.requestFocus(View.FOCUS_DOWN)
         val imm = webView.context.getSystemService(InputMethodManager::class.java) ?: return@post
         imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
+    }
+}
+
+private fun hideKeyboard(webView: WebView) {
+    webView.post {
+        val imm = webView.context.getSystemService(InputMethodManager::class.java) ?: return@post
+        imm.hideSoftInputFromWindow(webView.windowToken, 0)
     }
 }
 
@@ -160,8 +168,9 @@ private class MonacoBridge(
         main.post { onReady.invoke() }
     }
 
+    /** 用户明确点击编辑器后才弹出系统键盘（滚动不会触发） */
     @JavascriptInterface
-    fun onEditorFocused() {
+    fun onEditorTapped() {
         main.post { showKeyboard(webView) }
     }
 
@@ -249,9 +258,28 @@ fun MonacoEditorView(
                     isFocusableInTouchMode = true
                     setBackgroundColor(Color.parseColor(if (isDark) "#0D0D0D" else "#FAFAFA"))
 
+                    val touchSlop = ViewConfiguration.get(ctx).scaledTouchSlop
+                    var touchStartX = 0f
+                    var touchStartY = 0f
+                    var touchMoved = false
+
                     setOnTouchListener { v, event ->
-                        if (event.action == MotionEvent.ACTION_DOWN && !v.hasFocus()) {
-                            v.requestFocus(View.FOCUS_DOWN)
+                        when (event.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> {
+                                touchStartX = event.x
+                                touchStartY = event.y
+                                touchMoved = false
+                            }
+                            MotionEvent.ACTION_MOVE -> {
+                                if (!touchMoved) {
+                                    val dx = event.x - touchStartX
+                                    val dy = event.y - touchStartY
+                                    if (dx * dx + dy * dy > touchSlop * touchSlop) {
+                                        touchMoved = true
+                                        hideKeyboard(v as WebView)
+                                    }
+                                }
+                            }
                         }
                         false
                     }
