@@ -390,9 +390,7 @@ fun ScriptEditorScreen(
                             ToolbarAction(Icons.Default.Edit, "编辑") {
                                 Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                             }
-                            ToolbarAction(Icons.Default.BugReport, "调试") {
-                                Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
-                            }
+                            
                             ToolbarAction(Icons.Default.Terminal, "终端") {
                                 Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
                             }
@@ -464,35 +462,35 @@ fun ScriptEditorScreen(
 
                         Spacer(Modifier.weight(1f))
 
-                        Row(
-                            verticalAlignment     = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text       = "Ln $lineCount",
-                                fontSize   = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                color      = colors.onSurfaceVariant
-                            )
-                            Text(
-                                text     = "·",
-                                fontSize = 10.sp,
-                                color    = colors.outlineVariant
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(4.dp),
-                                color = colors.primaryContainer.copy(alpha = 0.6f)
-                            ) {
-                                Text(
-                                    text       = lang.label,
-                                    fontSize   = 9.5.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    fontFamily = FontFamily.Monospace,
-                                    color      = colors.primary,
-                                    modifier   = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
+                        // Row(
+                            // verticalAlignment     = Alignment.CenterVertically,
+                            // horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        // ) {
+                            // Text(
+                                // text       = "Ln $lineCount",
+                                // fontSize   = 10.sp,
+                                // fontFamily = FontFamily.Monospace,
+                                // color      = colors.onSurfaceVariant
+                            // )
+                            // Text(
+                                // text     = "·",
+                                // fontSize = 10.sp,
+                                // color    = colors.outlineVariant
+                            // )
+                            // Surface(
+                                // shape = RoundedCornerShape(4.dp),
+                                // color = colors.primaryContainer.copy(alpha = 0.6f)
+                            // ) {
+                                // Text(
+                                    // text       = lang.label,
+                                    // fontSize   = 9.5.sp,
+                                    // fontWeight = FontWeight.Bold,
+                                    // fontFamily = FontFamily.Monospace,
+                                    // color      = colors.primary,
+                                    // modifier   = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                // )
+                            // }
+                        // }
                     }
 
                     HorizontalDivider(color = colors.outlineVariant)
@@ -534,14 +532,14 @@ fun ScriptEditorScreen(
                         Spacer(Modifier.weight(1f))
                         Surface(
                             shape = RoundedCornerShape(3.dp),
-                            color = colors.surfaceContainerHigh
+                            color = colors.primaryContainer.copy(alpha = 0.6f)
                         ) {
                             Text(
                                 text       = lang.label,
                                 fontSize   = 9.5.sp,
                                 fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Medium,
-                                color      = colors.onSurfaceVariant,
+                                color      = colors.primary,
                                 modifier   = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -560,7 +558,7 @@ fun ScriptEditorScreen(
                     ) {
                         // 1. 新增【常驻粘贴】按钮：无论何时，剪贴板有东西就能在这里一键粘贴！
                         CodeKey(
-                            label   = "📋 粘贴", 
+                            label   = "粘贴", 
                             wide    = true, 
                             special = true
                         ) {
