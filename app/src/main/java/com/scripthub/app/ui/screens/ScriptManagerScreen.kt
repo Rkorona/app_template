@@ -643,12 +643,6 @@ fun ScriptCard(
         catch (e: Exception) { DependencyStatus.None }
     }
 
-    val lastRunColor = if (script.lastRun.contains("失败") || script.lastRun.contains("错误")) {
-        MaterialTheme.colorScheme.error
-    } else {
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
-    }
-
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -736,67 +730,54 @@ fun ScriptCard(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(2.dp))
-
-                // 第三行：触发条件 + 上次运行，对齐截图的"修改于 ..."一行
-                Text(
-                    text       = "${script.trigger} · ${script.lastRun}",
-                    style      = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace,
-                    color      = lastRunColor,
-                    maxLines   = 1
-                )
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                FilledIconButton(
-                    onClick   = onExecuteNow,
-                    enabled   = !script.isRunning,
-                    colors    = IconButtonDefaults.filledIconButtonColors(
-                        containerColor          = themeColor,
-                        contentColor            = Color.White,
-                        disabledContainerColor  = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
-                        disabledContentColor    = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f)
-                    ),
-                    modifier  = Modifier.size(34.dp),
-                    shape     = CircleShape
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "立即执行", modifier = Modifier.size(16.dp))
+            Box {
+                IconButton(onClick = { showMoreMenu = true }) {
+                    Icon(
+                        Icons.Default.MoreVert,
+                        contentDescription = "更多操作",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                    )
                 }
-
-                Box {
-                    IconButton(onClick = { showMoreMenu = true }) {
-                        Icon(
-                            Icons.Default.MoreVert,
-                            contentDescription = "更多操作",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                        )
-                    }
-                    DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
-                        DropdownMenuItem(
-                            text        = { Text("查看/编辑代码") },
-                            leadingIcon = { Icon(Icons.Default.Terminal, null) },
-                            onClick     = { showMoreMenu = false; onOpenDetail() }
-                        )
-                        DropdownMenuItem(
-                            text        = { Text("查看日志记录") },
-                            leadingIcon = { Icon(Icons.Default.History, null) },
-                            onClick     = { showMoreMenu = false; onViewLogs() }
-                        )
-                        if (script.isFolder) {
-                            DropdownMenuItem(
-                                text        = { Text("编辑项目信息") },
-                                leadingIcon = { Icon(Icons.Default.Edit, null) },
-                                onClick     = { showMoreMenu = false; onEditRequest() }
+                DropdownMenu(expanded = showMoreMenu, onDismissRequest = { showMoreMenu = false }) {
+                    DropdownMenuItem(
+                        text        = { Text(if (script.isRunning) "正在运行中…" else "立即执行") },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                null,
+                                tint = if (script.isRunning)
+                                    MaterialTheme.colorScheme.onSurface.copy(alpha = 0.35f)
+                                else themeColor
                             )
-                        }
-                        HorizontalDivider()
+                        },
+                        enabled = !script.isRunning,
+                        onClick = { showMoreMenu = false; onExecuteNow() }
+                    )
+                    DropdownMenuItem(
+                        text        = { Text("查看/编辑代码") },
+                        leadingIcon = { Icon(Icons.Default.Terminal, null) },
+                        onClick     = { showMoreMenu = false; onOpenDetail() }
+                    )
+                    DropdownMenuItem(
+                        text        = { Text("查看日志记录") },
+                        leadingIcon = { Icon(Icons.Default.History, null) },
+                        onClick     = { showMoreMenu = false; onViewLogs() }
+                    )
+                    if (script.isFolder) {
                         DropdownMenuItem(
-                            text        = { Text("删除脚本", color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
-                            onClick     = { showMoreMenu = false; onDeleteRequest() }
+                            text        = { Text("编辑项目信息") },
+                            leadingIcon = { Icon(Icons.Default.Edit, null) },
+                            onClick     = { showMoreMenu = false; onEditRequest() }
                         )
                     }
+                    HorizontalDivider()
+                    DropdownMenuItem(
+                        text        = { Text("删除脚本", color = MaterialTheme.colorScheme.error) },
+                        leadingIcon = { Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error) },
+                        onClick     = { showMoreMenu = false; onDeleteRequest() }
+                    )
                 }
             }
         }
