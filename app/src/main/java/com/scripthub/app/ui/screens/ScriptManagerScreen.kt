@@ -660,7 +660,8 @@ fun ScriptCard(
                 .padding(vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // ── 实心圆形图标，呼应文件管理器的"头像式"图标风格 ──
+            // ── Fluent 风格圆角方形图标：低透明度色块 + 主色图标 ──
+            val iconShape = RoundedCornerShape(10.dp)
             Box(
                 modifier         = Modifier.size(48.dp),
                 contentAlignment = Alignment.Center
@@ -670,17 +671,19 @@ fun ScriptCard(
                         modifier = Modifier
                             .matchParentSize()
                             .graphicsLayer { scaleX = pulseScale; scaleY = pulseScale }
-                            .background(themeColor.copy(alpha = pulseAlpha), CircleShape)
+                            .background(themeColor.copy(alpha = pulseAlpha * 0.6f), iconShape)
                     )
                 }
                 Box(
-                    modifier         = Modifier.size(44.dp).background(themeColor, CircleShape),
+                    modifier         = Modifier
+                        .size(42.dp)
+                        .background(themeColor.copy(alpha = 0.12f), iconShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector        = scriptIcon(script),
                         contentDescription = null,
-                        tint               = Color.White,
+                        tint               = themeColor,
                         modifier           = Modifier.size(20.dp)
                     )
                 }
