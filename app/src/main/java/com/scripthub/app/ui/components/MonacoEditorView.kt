@@ -336,8 +336,11 @@ fun MonacoEditorView(
                                     val dy = event.y - touchStartY
                                     if (dx * dx + dy * dy > touchSlop * touchSlop) {
                                         touchMoved = true
-                                        wv.disableIme()
-                                        wv.evaluateJavascript("dismissEditorInput()", null)
+                                        // 键盘已打开时，滑动浏览代码不自动收起
+                                        if (!wv.imeEnabled) {
+                                            wv.disableIme()
+                                            wv.evaluateJavascript("dismissEditorInput()", null)
+                                        }
                                     }
                                 }
                             }

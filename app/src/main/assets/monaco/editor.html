@@ -1115,7 +1115,10 @@ function focusEditor() {
     if (dx * dx + dy * dy > TOUCH_SLOP * TOUCH_SLOP) {
       movedBeyondSlop = true;
       clearTimeout(longTimer);
-      dismissEditorInput();
+      // 已进入编辑模式（键盘已打开）时，滑动浏览不自动收起键盘
+      if (!inputUnlocked) {
+        dismissEditorInput();
+      }
     }
   }
 
