@@ -329,6 +329,11 @@ fun MonacoEditorView(
                                 touchStartX = event.x
                                 touchStartY = event.y
                                 touchMoved = false
+                                // Android 16 在 ACTION_DOWN 阶段就可能建立 IME 连接，
+                                // 此处提前压制，防止键盘在滚动前被唤起
+                                if (!wv.imeEnabled) {
+                                    wv.disableIme()
+                                }
                             }
                             MotionEvent.ACTION_MOVE -> {
                                 if (!touchMoved) {
