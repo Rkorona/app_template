@@ -387,6 +387,168 @@ function selectAllText() {
   window.editor.setSelection(model.getFullModelRange());
 }
 
+function _currentLineRange() {
+  var model = window.editor.getModel();
+  var line = window.editor.getPosition().lineNumber;
+  return new monaco.Range(line, 1, line, model.getLineMaxColumn(line));
+}
+
+function getCurrentLineBase64() {
+  try {
+    var text = window.editor.getModel().getValueInRange(_currentLineRange());
+    return btoa(unescape(encodeURIComponent(text)));
+  } catch (e) { return ''; }
+}
+
+function cutCurrentLineBase64() {
+  try {
+    var range = _currentLineRange();
+    var model = window.editor.getModel();
+    var text = model.getValueInRange(range);
+    deleteCurrentLine();
+    return btoa(unescape(encodeURIComponent(text)));
+  } catch (e) { return ''; }
+}
+
+function deleteCurrentLine() {
+  if (!window.editor) return;
+  var model = window.editor.getModel();
+  var line = window.editor.getPosition().lineNumber;
+  var lineCount = model.getLineCount();
+  if (lineCount <= 1) {
+    window.editor.executeEdits('deleteLine', [{
+      range: model.getFullModelRange(),
+      text: ''
+    }]);
+    return;
+  }
+  if (line >= lineCount) {
+    window.editor.executeEdits('deleteLine', [{
+      range: new monaco.Range(line, 1, line, model.getLineMaxColumn(line)),
+      text: ''
+    }]);
+  } else {
+    window.editor.executeEdits('deleteLine', [{
+      range: new monaco.Range(line, 1, line + 1, 1),
+      text: ''
+    }]);
+  }
+}
+
+function clearCurrentLine() {
+  if (!window.editor) return;
+  window.editor.executeEdits('clearLine', [{
+    range: _currentLineRange(),
+    text: ''
+  }]);
+}
+
+function clearAllContent() {
+  if (!window.editor) return;
+  var model = window.editor.getModel();
+  window.editor.pushUndoStop();
+  model.pushEditOperations([], [{
+    range: model.getFullModelRange(),
+    text: ''
+  }], function () { return null; });
+  window.editor.pushUndoStop();
+  window.editor.setPosition({ lineNumber: 1, column: 1 });
+}
+
+function formatDocument() {
+  if (!window.editor) return;
+  window.editor.getAction('editor.action.formatDocument').run();
+}
+
+function toggleComment() {
+  if (!window.editor) return;
+  window.editor.getAction('editor.action.commentLine').run();
+}
+
+function _decodeB64(base64) {
+  return decodeURIComponent(escape(atob(base64)));
+}
+
+function findNextText(base64Query) {
+  try {
+    var query = _decodeB64(base64Query);
+    if (!query) return '0';
+    var model = window.editor.getModel();
+    var pos = window.editor.getSelection().getEndPosition();
+    var match = model.findNextMatch(query, pos, false, false, null, false);
+    if (!match) {
+      match = model.findNextMatch(query, { lineNumber: 1, column: 1 }, false, false, null, false);
+    }
+    if (match) {
+      window.editor.setSelection(match.range);
+      window.editor.revealRangeInCenter(match.range);
+      return '1';
+    }
+  } catch (e) {}
+  return '0';
+}
+
+function findPreviousText(base64Query) {
+  try {
+    var query = _decodeB64(base64Query);
+    if (!query) return '0';
+    var model = window.editor.getModel();
+    var pos = window.editor.getSelection().getStartPosition();
+    var match = model.findPreviousMatch(query, pos, false, false, null, false);
+    if (!match) {
+      var lastLine = model.getLineCount();
+      match = model.findPreviousMatch(
+        query,
+        { lineNumber: lastLine, column: model.getLineMaxColumn(lastLine) },
+        false, false, null, false
+      );
+    }
+    if (match) {
+      window.editor.setSelection(match.range);
+      window.editor.revealRangeInCenter(match.range);
+      return '1';
+    }
+  } catch (e) {}
+  return '0';
+}
+
+function replaceOneText(base64Find, base64Replace) {
+  try {
+    var find = _decodeB64(base64Find);
+    var replace = _decodeB64(base64Replace);
+    if (!find) return '0';
+    var model = window.editor.getModel();
+    var selection = window.editor.getSelection();
+    var selected = model.getValueInRange(selection);
+    var count = 0;
+    if (selected === find) {
+      window.editor.executeEdits('replace', [{
+        range: selection,
+        text: replace,
+        forceMoveMarkers: true
+      }]);
+      count = 1;
+    }
+    findNextText(base64Find);
+    return String(count);
+  } catch (e) { return '0'; }
+}
+
+function replaceAllText(base64Find, base64Replace) {
+  try {
+    var find = _decodeB64(base64Find);
+    var replace = _decodeB64(base64Replace);
+    if (!find) return '0';
+    var model = window.editor.getModel();
+    var matches = model.findMatches(find, false, false, false, null, false);
+    if (!matches.length) return '0';
+    window.editor.executeEdits('replaceAll', matches.map(function (m) {
+      return { range: m.range, text: replace, forceMoveMarkers: true };
+    }));
+    return String(matches.length);
+  } catch (e) { return '0'; }
+}
+
 /** 撤销 */
 function editorUndo() {
   window.editor.trigger('keyboard', 'undo', null);

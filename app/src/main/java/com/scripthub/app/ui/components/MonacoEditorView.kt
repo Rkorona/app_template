@@ -99,6 +99,40 @@ class MonacoEditorController(private val webView: WebView) {
     /** 全选 */
     fun selectAll() = evalJs("selectAllText()")
 
+    fun getCurrentLine(callback: (String) -> Unit) {
+        evalJsWithB64Result("getCurrentLineBase64()", callback)
+    }
+
+    fun cutCurrentLine(callback: (String) -> Unit) {
+        evalJsWithB64Result("cutCurrentLineBase64()", callback)
+    }
+
+    fun deleteCurrentLine() = evalJs("deleteCurrentLine()")
+
+    fun clearCurrentLine() = evalJs("clearCurrentLine()")
+
+    fun clearAll() = evalJs("clearAllContent()")
+
+    fun formatDocument() = evalJs("formatDocument()")
+
+    fun toggleComment() = evalJs("toggleComment()")
+
+    fun findNext(query: String, callback: (Boolean) -> Unit) {
+        evalJsWithBoolResult("findNextText('${b64(query)}')", callback)
+    }
+
+    fun findPrevious(query: String, callback: (Boolean) -> Unit) {
+        evalJsWithBoolResult("findPreviousText('${b64(query)}')", callback)
+    }
+
+    fun replaceOne(find: String, replace: String, callback: (Int) -> Unit) {
+        evalJsWithIntResult("replaceOneText('${b64(find)}','${b64(replace)}')", callback)
+    }
+
+    fun replaceAll(find: String, replace: String, callback: (Int) -> Unit) {
+        evalJsWithIntResult("replaceAllText('${b64(find)}','${b64(replace)}')", callback)
+    }
+
     /** 聚焦编辑器并弹出系统键盘 */
     fun focus() {
         evalJs("focusEditor()")
@@ -108,6 +142,33 @@ class MonacoEditorController(private val webView: WebView) {
     fun layout() = evalJs("layoutEditor()")
 
     // ── 内部工具 ──────────────────────────────────────────────────
+
+    private fun b64(text: String) =
+        Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+
+    private fun decodeJsB64(result: String?): String {
+        val clean = result?.removeSurrounding("\"") ?: ""
+        return try {
+            String(Base64.decode(clean, Base64.DEFAULT), Charsets.UTF_8)
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun parseJsString(result: String?): String =
+        result?.trim()?.removeSurrounding("\"") ?: ""
+
+    private fun evalJsWithB64Result(js: String, callback: (String) -> Unit) {
+        webView.evaluateJavascript(js) { callback(decodeJsB64(it)) }
+    }
+
+    private fun evalJsWithBoolResult(js: String, callback: (Boolean) -> Unit) {
+        webView.evaluateJavascript(js) { callback(parseJsString(it) == "1") }
+    }
+
+    private fun evalJsWithIntResult(js: String, callback: (Int) -> Unit) {
+        webView.evaluateJavascript(js) { callback(parseJsString(it).toIntOrNull() ?: 0) }
+    }
 
     private fun evalJs(js: String) {
         if (Looper.myLooper() == Looper.getMainLooper()) {

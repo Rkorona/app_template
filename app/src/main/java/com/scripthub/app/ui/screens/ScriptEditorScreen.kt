@@ -25,6 +25,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.scripthub.app.ui.components.EditorEditMenuSheet
+import com.scripthub.app.ui.components.EditorFindReplaceSheet
 import com.scripthub.app.ui.components.FolderFileBrowserSheet
 import com.scripthub.app.ui.components.MonacoEditorController
 import com.scripthub.app.ui.components.MonacoEditorView
@@ -258,6 +260,9 @@ fun ScriptEditorScreen(
     var isSaving        by remember { mutableStateOf(false) }
     var showTerminal    by remember { mutableStateOf(false) }
     var showFileBrowser by remember { mutableStateOf(false) }
+    var showEditMenu    by remember { mutableStateOf(false) }
+    var showFindReplace by remember { mutableStateOf(false) }
+    var showClearAllConfirm by remember { mutableStateOf(false) }
 
     val controllerRef = remember { mutableStateOf<MonacoEditorController?>(null) }
 
@@ -292,6 +297,15 @@ fun ScriptEditorScreen(
         lineCount      = text.count { it == '\n' } + 1
         charCount      = text.length
         isFileLoaded   = true
+    }
+
+    fun copyToClipboard(text: String, toast: String = "已复制") {
+        if (text.isEmpty()) {
+            Toast.makeText(context, "内容为空", Toast.LENGTH_SHORT).show()
+            return
+        }
+        clipboard.setPrimaryClip(ClipData.newPlainText("code", text))
+        Toast.makeText(context, toast, Toast.LENGTH_SHORT).show()
     }
 
     // ── 动作函数 ────────────────────────────────────────────────────
@@ -365,8 +379,8 @@ fun ScriptEditorScreen(
                             ToolbarAction(Icons.Default.FolderOpen, "文件") {
                                 showFileBrowser = true
                             }
-                            ToolbarAction(Icons.Default.Edit, "编辑") {
-                                Toast.makeText(context, "即将推出", Toast.LENGTH_SHORT).show()
+                            ToolbarAction(Icons.Default.Edit, "编辑", enabled = isFileLoaded) {
+                                showEditMenu = true
                             }
                             
                             ToolbarAction(Icons.Default.Terminal, "终端") {
@@ -724,6 +738,93 @@ fun ScriptEditorScreen(
                 showFileBrowser = false
             },
             onEntryPointChanged = {}
+        )
+    }
+
+    if (showEditMenu) {
+        val controller = controllerRef.value
+        EditorEditMenuSheet(
+            enabled = isFileLoaded && controller != null,
+            onDismiss = { showEditMenu = false },
+            onFindReplace = { showFindReplace = true },
+            onCopyAll = {
+                controller?.getContent { copyToClipboard(it, "已复制全部内容") }
+            },
+            onCopyLine = {
+                controller?.getCurrentLine { copyToClipboard(it, "已复制当前行") }
+            },
+            onCutLine = {
+                controller?.cutCurrentLine { copyToClipboard(it, "已剪切当前行") }
+            },
+            onDeleteLine = {
+                controller?.deleteCurrentLine()
+                Toast.makeText(context, "已删除当前行", Toast.LENGTH_SHORT).show()
+            },
+            onClearLine = {
+                controller?.clearCurrentLine()
+                Toast.makeText(context, "已清空当前行", Toast.LENGTH_SHORT).show()
+            },
+            onClearAll = { showClearAllConfirm = true },
+            onFormat = {
+                controller?.formatDocument()
+                Toast.makeText(context, "已执行格式化", Toast.LENGTH_SHORT).show()
+            },
+            onToggleComment = {
+                controller?.toggleComment()
+            }
+        )
+    }
+
+    if (showFindReplace) {
+        val controller = controllerRef.value
+        EditorFindReplaceSheet(
+            onDismiss = { showFindReplace = false },
+            onFindNext = { query ->
+                controller?.findNext(query) { found ->
+                    if (!found) Toast.makeText(context, "未找到", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onFindPrevious = { query ->
+                controller?.findPrevious(query) { found ->
+                    if (!found) Toast.makeText(context, "未找到", Toast.LENGTH_SHORT).show()
+                }
+            },
+            onReplaceOne = { find, replace ->
+                controller?.replaceOne(find, replace) { count ->
+                    Toast.makeText(
+                        context,
+                        if (count > 0) "已替换 1 处" else "未找到匹配项",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            },
+            onReplaceAll = { find, replace ->
+                controller?.replaceAll(find, replace) { count ->
+                    Toast.makeText(
+                        context,
+                        if (count > 0) "已替换 $count 处" else "未找到匹配项",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        )
+    }
+
+    if (showClearAllConfirm) {
+        AlertDialog(
+            onDismissRequest = { showClearAllConfirm = false },
+            title = { Text("清空文件") },
+            text = { Text("确定清空当前文件的全部代码？此操作可撤销。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    controllerRef.value?.clearAll()
+                    showClearAllConfirm = false
+                    Toast.makeText(context, "已清空", Toast.LENGTH_SHORT).show()
+                }) { Text("清空") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllConfirm = false }) { Text("取消") }
+            }
         )
     }
 }
