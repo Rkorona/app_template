@@ -4,8 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -19,10 +21,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.scripthub.app.ui.components.FolderFileBrowserSheet
@@ -33,26 +37,19 @@ import com.scripthub.app.utils.FileHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import kotlin.math.roundToInt
 
 // ──────────────────────────────────────────────────────────────────
 // 语言枚举 & 检测（Monaco language ID）
 // ──────────────────────────────────────────────────────────────────
 
 enum class EditorLang(val label: String, val monacoId: String) {
-    // Web
     JAVASCRIPT("JavaScript",  "javascript"),
     TYPESCRIPT("TypeScript",  "typescript"),
     HTML("HTML",              "html"),
     CSS("CSS",                "css"),
     SCSS("SCSS",              "scss"),
     JSON("JSON",              "json"),
-    // Systems
     PYTHON("Python",          "python"),
     KOTLIN("Kotlin",          "kotlin"),
     JAVA("Java",              "java"),
@@ -61,19 +58,16 @@ enum class EditorLang(val label: String, val monacoId: String) {
     RUST("Rust",              "rust"),
     GO("Go",                  "go"),
     SWIFT("Swift",            "swift"),
-    // Scripting
     SHELL("Shell",            "shell"),
     LUA("Lua",                "lua"),
     RUBY("Ruby",              "ruby"),
     PHP("PHP",                "php"),
-    // Data / Config
     YAML("YAML",              "yaml"),
     TOML("TOML",              "ini"),     // Monaco 用 ini 近似
     XML("XML",                "xml"),
     SQL("SQL",                "sql"),
     MARKDOWN("Markdown",      "markdown"),
     DOCKERFILE("Dockerfile",  "dockerfile"),
-    // Fallback
     PLAIN("Text",             "plaintext")
 }
 
@@ -254,7 +248,7 @@ fun ScriptEditorScreen(
     val context = LocalContext.current
     val scope   = rememberCoroutineScope()
 
-    // ── 当前活动文件状态（可通过文件浏览器切换）────────────────────────
+    // ── 当前活动文件状态 ──────────────────────────────────────────
     var activeFileName  by remember { mutableStateOf(fileName) }
     var activeIsFolder  by remember { mutableStateOf(isFolder) }
     var activeEntry     by remember { mutableStateOf(entryPoint) }
@@ -270,7 +264,6 @@ fun ScriptEditorScreen(
     var showTerminal    by remember { mutableStateOf(false) }
     var showFileBrowser by remember { mutableStateOf(false) }
 
-    // Monaco 控制器（替代原来的 CodeEditor 引用）
     val controllerRef = remember { mutableStateOf<MonacoEditorController?>(null) }
 
     var lineCount    by remember { mutableIntStateOf(1) }
@@ -280,11 +273,24 @@ fun ScriptEditorScreen(
     var hasSelection by remember { mutableStateOf(false) }
     var selectedText by remember { mutableStateOf("") }
 
+    // ── 自定义浮动工具栏坐标偏移（支持手动拖动避免遮挡）───────────────────
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(120f) } // 默认显示在屏幕上方约120dp处
+
     val clipboard = remember(context) {
         context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     }
 
-    // ── 文件加载（activeFileName/activeEntry 变化时自动重载）───────────
+    // ── 监听选区变化自动重置浮动菜单的默认位置 ─────────────────────────────
+    LaunchedEffect(hasSelection) {
+        if (hasSelection) {
+            // 当新选中内容时，重置到一个相对靠上的合适悬浮位置，你也可以通过 JS 传回的具体光标坐标来动态计算此值
+            offsetX = 0f
+            offsetY = 120f
+        }
+    }
+
+    // ── 文件加载 ──────────────────────────────────────────────────
     LaunchedEffect(activeFileName, activeEntry, activeIsFolder) {
         isFileLoaded = false
         controllerRef.value = null
@@ -299,7 +305,6 @@ fun ScriptEditorScreen(
 
     // ── 动作函数 ────────────────────────────────────────────────────
 
-    /** 保存文件：异步从 Monaco 取内容后写入磁盘 */
     fun saveFile(silent: Boolean = false, onDone: (() -> Unit)? = null) {
         val controller = controllerRef.value ?: return
         isSaving = true
@@ -317,7 +322,6 @@ fun ScriptEditorScreen(
         }
     }
 
-    /** 保存后运行 */
     fun runScript() {
         if (isSaving) return
         isSaving = true
@@ -338,14 +342,13 @@ fun ScriptEditorScreen(
     Scaffold(
         modifier = Modifier.imePadding(),
 
-        // ── TopBar：工具栏 + 文件标签 ─────────────────────────────────
+        // ── TopBar ───────────────────────────────────────────────────
         topBar = {
             Surface(
                 color          = colors.surfaceContainer,
                 tonalElevation = 0.dp
             ) {
                 Column {
-                    // ── 工具栏行 ─────────────────────────────────────
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier          = Modifier
@@ -402,7 +405,6 @@ fun ScriptEditorScreen(
 
                     HorizontalDivider(color = colors.outlineVariant)
 
-                    // ── 文件标签行 ───────────────────────────────────
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier          = Modifier
@@ -474,7 +476,7 @@ fun ScriptEditorScreen(
             }
         },
 
-        // ── BottomBar：状态栏 + 代码键盘 ─────────────────────────────
+        // ── BottomBar：去除了选区工具栏，保持底部的清爽简洁 ───────────────────────
         bottomBar = {
             Surface(color = colors.surfaceContainerLow) {
                 Column(modifier = Modifier.navigationBarsPadding()) {
@@ -521,56 +523,6 @@ fun ScriptEditorScreen(
                         }
                     }
 
-                    // ── 选区工具栏（有选中文本时滑入）────────────────────
-                    AnimatedVisibility(
-                        visible = hasSelection,
-                        enter   = expandVertically() + fadeIn(),
-                        exit    = shrinkVertically() + fadeOut()
-                    ) {
-                        Column {
-                            HorizontalDivider(color = colors.outlineVariant)
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(0.dp),
-                                verticalAlignment     = Alignment.CenterVertically,
-                                modifier              = Modifier
-                                    .fillMaxWidth()
-                                    .background(colors.secondaryContainer.copy(alpha = 0.5f))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                TextButton(
-                                    onClick      = { controllerRef.value?.selectAll() },
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                ) { Text("全选", fontSize = 12.sp) }
-                                TextButton(
-                                    onClick = {
-                                        if (selectedText.isNotEmpty()) {
-                                            clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
-                                        }
-                                        controllerRef.value?.deleteSelection()
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                ) { Text("剪切", fontSize = 12.sp) }
-                                TextButton(
-                                    onClick = {
-                                        if (selectedText.isNotEmpty()) {
-                                            clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
-                                            Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                ) { Text("复制", fontSize = 12.sp) }
-                                TextButton(
-                                    onClick = {
-                                        val text = clipboard.primaryClip
-                                            ?.getItemAt(0)?.text?.toString() ?: ""
-                                        if (text.isNotEmpty()) controllerRef.value?.typeText(text)
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
-                                ) { Text("粘贴", fontSize = 12.sp) }
-                            }
-                        }
-                    }
-
                     HorizontalDivider(color = colors.outlineVariant)
 
                     // ── 单行：光标 + 全部符号 ─────────────────────────
@@ -600,35 +552,124 @@ fun ScriptEditorScreen(
         containerColor = colors.surface
 
     ) { innerPadding ->
-        if (!isFileLoaded) {
-            Box(
-                modifier         = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center
+        // 使用 Box 覆盖层结构，把浮动菜单叠加在编辑器上方
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            if (!isFileLoaded) {
+                Box(
+                    modifier         = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = colors.primary)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            "加载中…",
+                            color = colors.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            } else {
+                MonacoEditorView(
+                    initialContent     = initialContent,
+                    language           = lang.monacoId,
+                    onEditorReady      = { controller -> controllerRef.value = controller },
+                    onStats            = { lines, chars -> lineCount = lines; charCount = chars },
+                    onCursor           = { line, col -> cursorLine = line; cursorCol = col },
+                    onSelectionChanged = { has, text -> hasSelection = has; selectedText = text },
+                    modifier           = Modifier.fillMaxSize()
+                )
+            }
+
+            // ── 方案二：优雅的浮动气泡菜单（在有选中文本时悬浮于编辑器中央或指定坐标） ──
+            AnimatedVisibility(
+                visible = hasSelection,
+                enter   = fadeIn() + scaleIn(),
+                exit    = fadeOut() + scaleOut(),
+                modifier = Modifier
+                    .align(Alignment.TopCenter) // 初始居中偏上
+                    .offset { IntOffset(offsetX.roundToInt(), offsetY.roundToInt()) }
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = colors.primary)
-                    Spacer(Modifier.height(12.dp))
-                    Text(
-                        "加载中…",
-                        color = colors.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                Card(
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                    shape     = RoundedCornerShape(24.dp), // 圆角气泡框
+                    colors    = CardDefaults.cardColors(
+                        containerColor = colors.surfaceColorAtElevation(6.dp)
+                    ),
+                    modifier = Modifier
+                        // 允许用户按住拖拽浮窗，避免遮挡代码
+                        .pointerInput(Unit) {
+                            detectDragGestures { change, dragAmount ->
+                                change.consume()
+                                offsetX += dragAmount.x
+                                offsetY += dragAmount.y
+                            }
+                        }
+                        .wrapContentSize()
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment     = Alignment.CenterVertically,
+                        modifier              = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
+                        // 左侧添加一个小拖拽手势提示图标
+                        Icon(
+                            imageVector = Icons.Default.DragIndicator,
+                            contentDescription = "拖动",
+                            tint = colors.outline.copy(alpha = 0.5f),
+                            modifier = Modifier.size(16.dp)
+                        )
+
+                        TextButton(
+                            onClick        = { controllerRef.value?.selectAll() },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier       = Modifier.height(32.dp)
+                        ) { Text("全选", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        
+                        VerticalDivider(modifier = Modifier.height(16.dp), color = colors.outlineVariant)
+                        
+                        TextButton(
+                            onClick = {
+                                if (selectedText.isNotEmpty()) {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
+                                }
+                                controllerRef.value?.deleteSelection()
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier       = Modifier.height(32.dp)
+                        ) { Text("剪切", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        
+                        VerticalDivider(modifier = Modifier.height(16.dp), color = colors.outlineVariant)
+                        
+                        TextButton(
+                            onClick = {
+                                if (selectedText.isNotEmpty()) {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("code", selectedText))
+                                    Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier       = Modifier.height(32.dp)
+                        ) { Text("复制", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                        
+                        VerticalDivider(modifier = Modifier.height(16.dp), color = colors.outlineVariant)
+                        
+                        TextButton(
+                            onClick = {
+                                val text = clipboard.primaryClip
+                                    ?.getItemAt(0)?.text?.toString() ?: ""
+                                if (text.isNotEmpty()) controllerRef.value?.typeText(text)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            modifier       = Modifier.height(32.dp)
+                        ) { Text("粘贴", fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                    }
                 }
             }
-        } else {
-            MonacoEditorView(
-                initialContent     = initialContent,
-                language           = lang.monacoId,
-                onEditorReady      = { controller -> controllerRef.value = controller },
-                onStats            = { lines, chars -> lineCount = lines; charCount = chars },
-                onCursor           = { line, col -> cursorLine = line; cursorCol = col },
-                onSelectionChanged = { has, text -> hasSelection = has; selectedText = text },
-                modifier           = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            )
         }
     }
 
@@ -641,19 +682,16 @@ fun ScriptEditorScreen(
     }
 
     if (showFileBrowser) {
-        // 始终打开工作目录根级浏览器，无论当前编辑的是单文件还是工程项目
         FolderFileBrowserSheet(
             folderName          = "",
             entryPoint          = if (activeIsFolder) "" else activeFileName,
             onDismiss           = { showFileBrowser = false },
             onSelectFile        = { relPath ->
                 if (!relPath.contains("/")) {
-                    // 工作目录根级单文件
                     activeFileName = relPath
                     activeIsFolder = false
                     activeEntry    = relPath
                 } else {
-                    // 工程项目内的文件：projectFolder/fileInProject
                     val projectFolder = relPath.substringBefore("/")
                     val fileInProject = relPath.substringAfter("/")
                     activeFileName = projectFolder
